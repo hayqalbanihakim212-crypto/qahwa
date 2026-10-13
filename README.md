@@ -12,7 +12,7 @@
 
 > Aplikasi web untuk memesan dan membayar langsung dari meja: scan QR, pilih menu, lalu bayar lewat **QRIS** — dilengkapi panel admin yang aman, tanpa dependensi npm, dan siap deploy di **Vercel**.
 
-### 🌐 [Buka Frontend →](https://qahwa.vercel.app)
+### 🌐 [Buka Frontend →] https://github.com/hayqalbanihakim212-crypto/qahwa/
 
 *Tanpa scan QR meja, halaman hanya menampilkan menu. Tombol bayar baru aktif lewat tautan QR `/?m=KODE`.*
 
