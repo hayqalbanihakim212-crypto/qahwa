@@ -12,7 +12,7 @@
 
 > Aplikasi web untuk memesan menu dan membayar lewat **QRIS**. Pelanggan scan QR di meja, pesan, bayar, dan pesanan langsung masuk ke dapur lengkap dengan nomor mejanya. Tanpa dependensi npm, cukup Node.js.
 
-### 🌐 [Buka Frontend →](https://hayqalbanihakim212-crypto.github.io/qahwa/public/home.html)
+### 🌐 [Buka Frontend →](https://hayqalbanihakim212-crypto.github.io/qahwa/public/index.html)
 ### 🔐 [Buka Panel Admin (Dashboard) →](https://hayqalbanihakim212-crypto.github.io/qahwa/public/admin.html)
 
 *Untuk melihat tampilan langsung, jalankan server lokal (`npm run dev`) lalu buka `http://localhost:3000` dan `http://localhost:3000/admin`.*
