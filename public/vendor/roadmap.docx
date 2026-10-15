@@ -1,0 +1,57 @@
+Ini peta fungsi tiap file, lalu alur kerjanya secara keseluruhan.
+
+Gambaran besar
+
+Qahwa adalah aplikasi pemesanan kafe berbasis QR meja. Pelanggan scan QR di meja, memilih menu, membayar QRIS lewat Midtrans, lalu memantau status pesanan. Staf melihat antrian di dashboard admin dan mengubah statusnya. Backend berupa serverless function gaya Vercel di folder api/, dengan Redis sebagai penyimpanan data.
+
+Halaman pelanggan
+index.html adalah kerangka halaman pelanggan. Isinya layar pembuka 3D, header dengan label meja, banner mode, area #app, bar keranjang, dan toast.
+ds.css adalah design system bersama (tema putih bergaya 3D), dipakai halaman pelanggan dan admin.
+app.js adalah otak halaman pelanggan:
+Membaca kode meja dari ?m=KODE lalu menanyakan nama mejanya ke /api/table?c=.
+Mengambil menu dari /api/menu, mengelola keranjang, checkout, dan pelacakan status.
+Membuat pesanan lewat /api/order, membuka Midtrans Snap, atau tombol simulasi bayar saat mode mock.
+Polling status tiap 4 detik. Pesanan aktif disimpan di localStorage supaya tidak hilang saat halaman di-refresh.
+Kalau /api/menu gagal (misalnya saat dibuka sebagai file pratinjau), otomatis masuk mode demo dengan menu contoh.
+intro.js adalah adegan three.js berupa cangkir kopi 3D yang bisa diputar. Dimuat belakangan lewat import(). Kalau WebGL gagal, tampil versi CSS (tulisan قهوة berputar).
+three_module_min.js adalah library three.js. Di kode diimpor sebagai /vendor/three.module.min.js, jadi pastikan nama file di folder public/vendor/ sesuai.
+qr.html hanya pengalihan lama ke /admin#meja.
+Dashboard admin
+admin.html adalah kerangka halaman admin: header, tab, dan area konten.
+admin.js (versi frontend) menangani:
+Login, logout, dan sesi lewat cookie HttpOnly. Tidak ada token yang disimpan di browser.
+Tab Antrian: statistik hari ini, daftar pesanan, bunyi beep saat ada pesanan baru dibayar, dan tombol alur status paid → making → ready → done. Polling tiap 5 detik.
+Tab Meja & QR: mengatur jumlah meja (1 sampai 60), opsi QR “Bawa pulang”, alamat situs dalam QR, lalu membuat dan mencetak QR tiap meja.
+qrcode.js adalah library pembuat QR (dipakai qrcode(0,"M") dan createSvgTag), diakses sebagai /vendor/qrcode.js.
+API (serverless)
+menu.js mengirim daftar menu, mode pembayaran, client key, dan URL Snap. Responsnya di-cache 60 detik.
+table.js punya dua jalur. Jalur publik (?c=KODE) menerjemahkan kode QR menjadi nama meja dan hanya mengirim nama meja. Jalur admin menampilkan daftar meja beserta kodenya dan mengatur jumlah meja.
+order.js punya dua fungsi:
+GET mengembalikan status pesanan setelah disinkronkan dengan Midtrans.
+POST membuat pesanan baru. Harga selalu diambil dari server, meja ditentukan dari kode QR (bukan isian pelanggan), dan ada rate limit. Setelah itu server meminta token Snap ke Midtrans (atau token palsu saat mock), menyimpan pesanan, dan memasukkannya ke daftar orders.
+notify.js adalah webhook Midtrans. Ia memverifikasi signature (SHA-512 dari order_id, status_code, gross_amount, dan server key), mencocokkan nominal, lalu mengubah status pesanan. Di mode mock endpoint ini tidak aktif.
+mockpay.js menyimulasikan bayar berhasil atau gagal, hanya aktif di mode mock.
+auth.js menangani sesi admin: GET untuk cek sesi, POST untuk login (maksimal 5 percobaan per 15 menit per IP, ada jeda saat salah, dan cek same-origin), DELETE untuk logout.
+Script dan konfigurasi
+package.json mendefinisikan perintah dev, hash, dan preview. Tidak ada dependensi, hanya butuh Node 18 ke atas.
+dev.js adalah server lokal: membaca .env (tahan CRLF, BOM, dan tanda kutip), menyajikan folder public/, meneruskan /api/* ke file di api/ dengan pembungkus req/res mirip Vercel, dan memakai header dari vercel.json.
+hash-password.js membuat nilai ADMIN_PASSWORD_HASH (scrypt) untuk .env.
+build-preview.js menggabungkan index.html, ds.css, dan app.js menjadi satu file.
+qahwa-preview.html adalah hasil build itu, pratinjau tampilan saja tanpa server pembayaran.
+Alur dari ujung ke ujung
+QR meja membuka /?m=KODE, lalu app.js menanyakan nama meja ke table.js.
+Pelanggan memilih menu dan menekan bayar, lalu order.js memvalidasi dan membuat transaksi Midtrans.
+Pelanggan membayar lewat Snap. Midtrans memanggil notify.js untuk menandai pesanan paid.
+Admin melihat pesanan di antrian (admin.js ke /api/admin) dan menggeser statusnya, sementara layar pelanggan ikut berubah lewat polling.
+File yang belum ada
+
+Hampir semua file api/ memanggil require("./_lib"), jadi yang paling jelas kurang adalah api/_lib.js. Dari pemakaiannya, ia menampung:
+
+Konfigurasi: MENU, MODE, MT, CLIENT_KEY, SERVER_KEY, configError.
+Redis dan data pesanan: redis, getOrder, putOrder, sync, applyMidtrans, newId, ID_RE.
+Keamanan: ip, sameOrigin, limit, sha, safeEq.
+Meja: getTables, setTables, tableByCode.
+Sesi admin: authConfigured, verifyPassword, startSession, endSession, isAdmin.
+
+Ada satu hal yang perlu dicek: admin.js yang terkirim adalah versi frontend. Backend api/admin.js (yang melayani /api/admin untuk daftar pesanan dan ubah status) tidak ada di daftar, begitu juga vercel.json yang dibaca dev.js. Kalau yang kamu maksud “satu file” adalah _lib.js, kemungkinan dua file lain ini memang belum kamu kirim juga, atau dua file bernama admin.js tertimpa saat diunggah.
+

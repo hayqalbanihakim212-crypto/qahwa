@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0b0b" />
+    <title>Qahwa</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link href="/ds.css" rel="stylesheet" />
+    <link href="/theme.css" rel="stylesheet" />
+  </head>
+  <body>
+    <section class="intro" id="intro" aria-label="Selamat datang">
+      <div class="stage">
+        <div class="fb" aria-hidden="true">
+          <span lang="ar" dir="rtl">قهوة</span>
+        </div>
+        <canvas
+          id="cv"
+          aria-label="Cangkir kopi 3D, geser untuk memutar"
+        ></canvas>
+      </div>
+      <div class="hero">
+        <img class="hero-logo" src="/img/logo.png" alt="Qahwa Est. 2019" />
+        <h1 class="sr">Qahwa</h1>
+        <div class="greet" id="greet" hidden role="status"></div>
+        <button class="btn" id="go" data-a="go">Mulai pesan</button>
+        <p class="muted">Pesan dan bayar QRIS langsung dari meja</p>
+        <a class="lnk" href="/home">Tentang Qahwa</a>
+      </div>
+    </section>
+    <header class="top">
+      <img class="logo" src="/img/logo.png" alt="Qahwa" />
+      <div class="ttl">Qahwa<span>Pesan dan bayar QRIS dari meja</span></div>
+      <div class="pill" id="mj" hidden></div>
+    </header>
+    <div class="banner" id="mode" hidden></div>
+    <main class="wrap" id="app"></main>
+    <div class="bar" id="cart" hidden></div>
+    <div class="toast" id="msg" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

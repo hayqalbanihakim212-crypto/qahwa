@@ -1,0 +1,345 @@
+/* Tema Qahwa: hitam + emas. Dimuat SETELAH ds.css dan menimpa warna putihnya. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0b;
+  --surface: #141414;
+  --text: #f6f1e7;
+  --muted: #a99f8d;
+  --line: #3a2d14;
+  --gold: #e9a63b;
+  --action: #e9a63b;
+  --on-action: #111;
+  --depth: #8a5d0f;
+  --sunk: #1a1a1a;
+  --ok: #5fd08c;
+  --bad: #ff8a80;
+  --warn-bg: #2a2108;
+  --warn-tx: #f0c96b;
+  --lift: 0 0 0 1px rgba(233, 166, 59, 0.18), 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+html,
+body {
+  overflow-x: hidden;
+  background: #0b0b0b;
+}
+:focus-visible {
+  outline-color: var(--gold);
+}
+h2 {
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+.row {
+  border-bottom: 1px dotted rgba(233, 166, 59, 0.35);
+}
+.top {
+  background: #0b0b0b;
+  box-shadow: 0 1px 0 rgba(233, 166, 59, 0.5);
+}
+.logo {
+  height: 40px;
+  width: auto;
+  display: block;
+}
+.ttl span {
+  color: var(--muted);
+}
+.pill {
+  color: #111;
+  box-shadow: 0 3px 0 var(--depth);
+}
+.btn {
+  color: #111;
+  background: linear-gradient(#f3b84c, #d9961f);
+}
+.btn.ghost,
+.top .btn {
+  background: transparent;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  box-shadow: 0 4px 0 rgba(233, 166, 59, 0.35);
+}
+input,
+select {
+  background: var(--sunk);
+  border-color: #3a3a3a;
+  color: var(--text);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+input::placeholder {
+  color: #777;
+}
+.chip {
+  background: #2a2a2a;
+  color: var(--text);
+  box-shadow: none;
+}
+.chip.paid,
+.chip.making {
+  background: var(--gold);
+  color: #111;
+  box-shadow: none;
+}
+.card {
+  background: var(--surface);
+  border-color: rgba(233, 166, 59, 0.3);
+}
+.chips {
+  background: linear-gradient(#0b0b0b 80%, rgba(11, 11, 11, 0));
+}
+.chips button,
+.tabs button {
+  background: transparent;
+  color: var(--text);
+  border-color: rgba(233, 166, 59, 0.5);
+  box-shadow: none;
+}
+.chips .on,
+.tabs .on {
+  background: var(--gold);
+  color: #111;
+  border-color: var(--gold);
+}
+.add,
+.qty button {
+  background: transparent;
+  color: var(--gold);
+  border-color: var(--gold);
+  box-shadow: none;
+}
+.steps li {
+  border-top-color: #333;
+}
+.steps .on {
+  border-color: var(--gold);
+}
+.bar {
+  background: linear-gradient(#f3b84c, #d9961f);
+  color: #111;
+  box-shadow:
+    0 6px 0 var(--depth),
+    0 18px 34px rgba(0, 0, 0, 0.6);
+}
+.bar button {
+  background: #111;
+  color: var(--gold);
+  box-shadow: none;
+}
+.toast {
+  background: var(--gold);
+  color: #111;
+}
+.banner {
+  border-bottom: 1px solid rgba(233, 166, 59, 0.3);
+}
+
+/* daftar menu gaya papan menu */
+.list {
+  border: 1px solid var(--gold);
+  border-radius: 18px;
+  padding: 2px 16px;
+  margin: 8px 0 18px;
+  background: #0e0e0e;
+}
+.mi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(233, 166, 59, 0.28);
+}
+.mi:last-child {
+  border-bottom: 0;
+}
+.mi .nm {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+}
+.mi .pc {
+  color: var(--gold);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mi .soon {
+  color: var(--muted);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.cat {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 1.5rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cat::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 2px;
+  background: var(--gold);
+  margin: 6px auto 0;
+}
+
+/* layar pembuka */
+.intro {
+  background: radial-gradient(120% 70% at 50% 35%, #1f1709 0, #0b0b0b 68%);
+}
+.fb span {
+  color: var(--gold);
+  text-shadow: 0 0 28px rgba(233, 166, 59, 0.45);
+}
+.hero-logo {
+  display: block;
+  width: min(260px, 70vw);
+  height: auto;
+  margin: 0 auto;
+}
+.hero p {
+  color: var(--muted);
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.greet {
+  color: var(--muted);
+}
+.greet b {
+  color: var(--gold);
+  text-shadow: 0 2px 14px rgba(233, 166, 59, 0.35);
+}
+.lnk {
+  display: inline-block;
+  margin-top: var(--s2);
+  color: var(--gold);
+  font-size: var(--fs-s);
+  text-underline-offset: 3px;
+}
+
+/* halaman home */
+.home {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 var(--s5) 48px;
+  text-align: center;
+}
+.home .cover {
+  display: block;
+  width: min(360px, 100%);
+  height: auto;
+  margin: var(--s5) auto;
+  border-radius: 22px;
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 40px rgba(233, 166, 59, 0.15);
+}
+.home .hero-logo {
+  width: min(300px, 80vw);
+  margin-top: var(--s5);
+}
+.home h2 {
+  margin-top: 32px;
+}
+.home p {
+  margin: var(--s2) 0;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s2);
+  margin: var(--s3) 0;
+}
+.tags span {
+  border: 1px solid rgba(233, 166, 59, 0.6);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+  font-size: var(--fs-s);
+}
+.info {
+  text-align: left;
+}
+.info b {
+  color: var(--gold);
+  display: block;
+  font-size: var(--fs-s);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.info a {
+  color: var(--text);
+}
+.foot {
+  margin-top: 32px;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.home .btn {
+  text-decoration: none;
+  text-align: center;
+}
+
+/* QR admin harus tetap putih agar terbaca kamera */
+.qr {
+  background: #fff;
+  padding: 10px;
+  border-radius: 12px;
+}
+@media print {
+  body,
+  .card {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  h2,
+  .muted {
+    color: #000 !important;
+  }
+}
+
+/* HP / layar sentuh: matikan 3D berbasis translateZ yang membuat teks buram di Android */
+@media (hover: none), (pointer: coarse) {
+  .wrap,
+  .grid,
+  .intro {
+    perspective: none;
+  }
+  #app.in {
+    animation: fadein 0.3s;
+  }
+  .fb span,
+  .hero h1,
+  .greet b {
+    text-shadow: none;
+  }
+  .btn,
+  .add,
+  .chips button {
+    transition: none;
+  }
+  .stage canvas {
+    touch-action: pan-y;
+  }
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.intro {
+  height: 100dvh;
+  overflow-y: auto;
+}
+.stage {
+  min-height: 160px;
+}
