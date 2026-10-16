@@ -1,30 +1,31 @@
 <!doctype html>
 <html lang="id">
   <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>Qahwa Admin</title>
+    <title>Admin Qahwa</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <link href="/ds.css" rel="stylesheet" />
     <link href="/theme.css" rel="stylesheet" />
+    <link href="/admin.css" rel="stylesheet" />
   </head>
   <body>
     <header class="top no">
-      <div class="ttl">Qahwa Admin</div>
-      <button class="btn" id="out" hidden>Keluar</button>
+      <div class="ttl">Admin Qahwa</div>
+      <button class="btn" id="out">keluar</button>
     </header>
     <div class="banner no" id="mode" hidden></div>
     <nav class="tabs no" id="tabs" hidden>
-      <button data-tab="queue" id="t-queue">Antrian</button
-      ><button data-tab="meja" id="t-meja">Meja &amp; QR</button>
+      <button data-tab="queue" id="t-queue">Antrian</button>
+      <button data-tab="stok" id="t-stok">Stok &amp; Menu</button>
+      <button data-tab="stat" id="t-stat">Statistik</button>
+      <button data-tab="hist" id="t-hist">Riwayat</button>
+      <button data-tab="meja" id="t-meja">Meja &amp; QR</button>
     </nav>
     <main class="wrap" id="app"></main>
     <script src="/vendor/qrcode.js"></script>

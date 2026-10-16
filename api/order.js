@@ -2,7 +2,7 @@ const {
   MODE,
   MT,
   basic,
-  MENU,
+  getMenu,
   configError,
   redis,
   getOrder,
@@ -14,13 +14,22 @@ const {
   sameOrigin,
   limit,
   tableByCode,
+  sha,
+  newSecret,
+  secOk,
+  clean,
 } = require("./_lib");
 module.exports = async (req, res) => {
   try {
     if (req.method === "GET") {
+      res.setHeader("Cache-Control", "private, no-store");
+      if (!(await limit("rl:ordget:" + ip(req), 600, 60)))
+        return res.status(429).json({ error: "too_many" });
       const id = String(req.query.id || "");
       let o = ID_RE.test(id) ? await getOrder(id) : null;
-      if (!o) return res.status(404).json({ error: "not_found" });
+      // 404 yang sama untuk "tidak ada" dan "token salah", supaya ID tidak bisa ditebak
+      if (!o || !secOk(o, req.headers["x-order-token"]))
+        return res.status(404).json({ error: "not_found" });
       o = await sync(o);
       return res.json({
         id: o.id,
@@ -40,27 +49,40 @@ module.exports = async (req, res) => {
     const b = req.body || {},
       items = [];
     let total = 0;
+    const { menu: MENU, closed } = await getMenu();
     for (const x of Array.isArray(b.items) ? b.items.slice(0, 30) : []) {
       const m = MENU.find((m) => m.id === x.id),
         q = Math.floor(Number(x.q));
-      if (!m || !m.p || !(q >= 1 && q <= 20)) continue;
-      items.push({ id: m.id, n: m.n, q, p: m.p });
-      total += q * m.p; // harga selalu dari server
+      if (!m || m.off || closed.includes(m.c))
+        return res.status(409).json({ error: "unavailable" });
+      let p = m.p,
+        n = m.n,
+        vk;
+      if (m.v) {
+        // menu bervarian: varian wajib dipilih dan harus ada di daftar server
+        const vr = m.v.find((z) => z.k === x.v);
+        if (!vr) return res.status(409).json({ error: "unavailable" });
+        p = vr.p;
+        n = `${m.n} (${vr.k})`;
+        vk = vr.k;
+      }
+      if (!p || !(q >= 1 && q <= 20)) continue;
+      items.push({ id: m.id, v: vk, n, q, p });
+      total += q * p; // harga selalu dari server
     }
     const tb = await tableByCode(b.code); // meja ditentukan server dari kode QR, bukan dari isian pelanggan
     if (!tb) return res.status(400).json({ error: "table" });
     const table = tb.t;
-    if (!items.length || total > 5000000)
-      return res.status(400).json({ error: "bad" });
+    if (!(await limit("rl:ordtb:" + table, 40, 600)))
+      return res.status(429).json({ error: "too_many" });
     const id = newId();
+    const sec = newSecret();
     const o = {
       id,
-      name:
-        String(b.name || "")
-          .trim()
-          .slice(0, 30) || "Tamu",
+      name: clean(b.name, 30) || "Tamu",
       table,
-      note: String(b.note || "").slice(0, 60),
+      note: clean(b.note, 60),
+      sh: sha(sec, "sha256"),
       items,
       total,
       status: "pending",
@@ -78,7 +100,7 @@ module.exports = async (req, res) => {
         body: JSON.stringify({
           transaction_details: { order_id: id, gross_amount: total },
           item_details: items.map((i) => ({
-            id: String(i.id),
+            id: String(i.id) + (i.v ? "-" + i.v : ""),
             name: i.n.slice(0, 50),
             price: i.p,
             quantity: i.q,
@@ -97,7 +119,7 @@ module.exports = async (req, res) => {
     await putOrder(o);
     await redis("LPUSH", "orders", id);
     await redis("LTRIM", "orders", 0, 499);
-    res.json({ id, token });
+    res.json({ id, token, sec });
   } catch (e) {
     console.error(e.message);
     res.status(500).json({ error: "server" });

@@ -1,11 +1,19 @@
 const crypto = require("crypto");
 
 /* ---------- Mode pembayaran: mock | sandbox | production (default mock, paling aman) ---------- */
-const MODE = ["mock", "sandbox", "production"].includes(
+const REQ_MODE = ["mock", "sandbox", "production"].includes(
   process.env.PAYMENT_MODE,
 )
   ? process.env.PAYMENT_MODE
   : "mock";
+
+const MODE =
+  REQ_MODE === "mock" &&
+  process.env.VERCEL_ENV === "production" &&
+  process.env.ALLOW_MOCK !== "1"
+    ? "locked"
+    : REQ_MODE;
+
 const SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || "";
 const CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY || "";
 const prod = MODE === "production";
@@ -22,6 +30,7 @@ const MT = {
 };
 const basic = "Basic " + Buffer.from(SERVER_KEY + ":").toString("base64");
 // Cegah salah pasang kunci: sandbox wajib kunci SB-, production wajib kunci non-SB
+if (MODE === "locked") return "Mode mock dikunci di production.";
 const configError = () => {
   if (MODE === "mock") return null;
   if (!SERVER_KEY || !CLIENT_KEY) return "Kunci Midtrans belum diisi.";
@@ -34,14 +43,73 @@ const configError = () => {
 };
 
 /* ---------- Menu: harga dipegang server ---------- */
-const MENU = require("./_menu");
+const BASE = require("./_menu"); // menu bawaan (statis). Perubahan admin disimpan di Redis, bukan di file ini.
 
-/* ---------- Penyimpanan: Upstash Redis; tanpa Redis hanya boleh di komputer lokal (memori sementara) ---------- */
-const RU = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const RT =
-  process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+/* ---------- Penyimpanan: Supabase; tanpa Supabase hanya boleh di komputer lokal (memori sementara) ---------- */
+const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+const SK = process.env.SUPABASE_SERVICE_ROLE_KEY || ""; // hanya di server, jangan pernah dikirim ke browser
+/* Mode penyimpanan:
+   - "supabase": SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY terisi.
+   - "local"   : tanpa Supabase (pengembangan). Data disimpan di file .data/local.json di komputer ini,
+                 jadi tidak hilang saat server dijalankan ulang. Paksa dengan STORAGE_MODE=local di .env
+                 (berguna untuk `vercel dev`, yang selalu menganggap dirinya di Vercel).
+   - "none"    : sedang di Vercel tanpa Supabase. Semua akses penyimpanan menolak dengan pesan jelas. */
+const forceLocal =
+  process.env.STORAGE_MODE === "local" &&
+  process.env.VERCEL_ENV !== "production";
+const STORAGE =
+  SB && SK && !forceLocal
+    ? "supabase"
+    : process.env.VERCEL && !forceLocal
+      ? "none"
+      : "local";
+const fs = require("fs");
+const path = require("path");
+const LOCAL_FILE =
+  process.env.LOCAL_DB_FILE || path.join(process.cwd(), ".data", "local.json");
 const mem = { kv: new Map(), ls: new Map() };
+let lastM = 0;
+// Muat ulang dari file kalau file berubah (mungkin ditulis proses/fungsi lain).
+// Kunci "rl:" (pembatas percobaan) hanya di memori dan tidak disimpan.
+const loadLocal = () => {
+  if (STORAGE !== "local") return;
+  try {
+    const m = fs.statSync(LOCAL_FILE).mtimeMs;
+    if (m === lastM) return;
+    lastM = m;
+    const d = JSON.parse(fs.readFileSync(LOCAL_FILE, "utf8"));
+    const now = Date.now();
+    for (const k of [...mem.kv.keys()])
+      if (!k.startsWith("rl:")) mem.kv.delete(k);
+    mem.ls.clear();
+    for (const [k, e] of d.kv || []) if (!e.x || e.x > now) mem.kv.set(k, e);
+    for (const [k, l] of d.ls || []) mem.ls.set(k, l);
+  } catch (e) {} // belum ada file = mulai kosong
+};
+const saveLocal = () => {
+  if (STORAGE !== "local") return;
+  try {
+    fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
+    const data = {
+      kv: [...mem.kv].filter(([k]) => !k.startsWith("rl:")),
+      ls: [...mem.ls],
+    };
+    const tmp = LOCAL_FILE + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(data));
+    fs.renameSync(tmp, LOCAL_FILE);
+    lastM = fs.statSync(LOCAL_FILE).mtimeMs;
+  } catch (e) {
+    console.error("simpan lokal gagal:", e.message);
+  }
+};
 const memRedis = (c, ...a) => {
+  loadLocal();
+  const r = memRedisRaw(c, ...a);
+  const rl = typeof a[0] === "string" && a[0].startsWith("rl:");
+  if (!rl && c !== "GET" && c !== "LRANGE" && c !== "MGET") saveLocal();
+  return r;
+};
+const memRedisRaw = (c, ...a) => {
   const [k, v] = a,
     now = Date.now();
   const get = (key) => {
@@ -69,6 +137,12 @@ const memRedis = (c, ...a) => {
       mem.kv.set(k, { v: String(n), x: e ? e.x : 0 });
       return n;
     }
+    case "INCREX": {
+      const e = get(k),
+        n = (e ? +e.v : 0) + 1;
+      mem.kv.set(k, { v: String(n), x: e ? e.x : now + v * 1000 });
+      return n;
+    }
     case "EXPIRE": {
       const e = get(k);
       if (e) e.x = now + v * 1000;
@@ -90,19 +164,86 @@ const memRedis = (c, ...a) => {
   }
   throw new Error("cmd");
 };
-const redis = async (...cmd) => {
-  if (!RU || !RT) {
-    if (process.env.VERCEL) throw new Error("Redis belum dihubungkan");
-    return memRedis(...cmd);
-  }
-  const r = await fetch(RU, {
-    method: "POST",
-    headers: { Authorization: "Bearer " + RT },
-    body: JSON.stringify(cmd),
+/* Supabase (Postgres) lewat REST. Tabel dan fungsi dibuat oleh supabase.sql.
+   Nama fungsi "redis" dipertahankan supaya file api lain tidak perlu diubah. */
+const sb = async (method, path, body, extra = {}) => {
+  const r = await fetch(SB + "/rest/v1/" + path, {
+    method,
+    headers: {
+      apikey: SK,
+      Authorization: "Bearer " + SK,
+      "Content-Type": "application/json",
+      ...extra,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const j = await r.json();
-  if (j.error) throw new Error(j.error);
-  return j.result;
+  const t = await r.text();
+  if (!r.ok) throw new Error("Supabase " + r.status + ": " + t.slice(0, 120));
+  return t ? JSON.parse(t) : null;
+};
+const q = encodeURIComponent;
+const live = (row) => !!row && (!row.exp || new Date(row.exp) > new Date());
+const inFuture = (sec) => new Date(Date.now() + sec * 1000).toISOString();
+const sbRedis = async (c, ...a) => {
+  const [k, v] = a;
+  switch (c) {
+    case "GET": {
+      const rows = await sb("GET", `kv?k=eq.${q(k)}&select=v,exp`);
+      return live(rows[0]) ? rows[0].v : null;
+    }
+    case "SET": {
+      const i = a.indexOf("EX");
+      await sb(
+        "POST",
+        "kv?on_conflict=k",
+        { k, v, exp: i > 0 ? inFuture(+a[i + 1]) : null },
+        { Prefer: "resolution=merge-duplicates" },
+      );
+      return "OK";
+    }
+    case "DEL":
+      await sb("DELETE", `kv?k=eq.${q(k)}`);
+      return 1;
+    case "INCR":
+      return Number(await sb("POST", "rpc/kv_incr", { p_key: k }));
+    case "INCREX":
+      return Number(
+        await sb("POST", "rpc/kv_incr_ex", { p_key: k, p_ttl: +v }),
+      );
+    case "EXPIRE":
+      await sb("PATCH", `kv?k=eq.${q(k)}`, { exp: inFuture(+v) });
+      return 1;
+    case "LPUSH":
+      await sb("POST", "kv_list", { k, v });
+      return 1;
+    case "LTRIM":
+      await sb("POST", "rpc/kv_ltrim", { p_key: k, p_keep: +a[2] + 1 });
+      return "OK";
+    case "LRANGE": {
+      const s = +a[1],
+        n = +a[2] - s + 1;
+      const rows = await sb(
+        "GET",
+        `kv_list?k=eq.${q(k)}&select=v&order=id.desc&offset=${s}&limit=${n}`,
+      );
+      return rows.map((x) => x.v);
+    }
+    case "MGET": {
+      if (!a.length) return [];
+      const rows = await sb(
+        "GET",
+        `kv?k=in.(${a.map((x) => q('"' + x + '"')).join(",")})&select=k,v,exp`,
+      );
+      const m = new Map(rows.filter(live).map((x) => [x.k, x.v]));
+      return a.map((x) => m.get(x) ?? null);
+    }
+  }
+  throw new Error("cmd");
+};
+const redis = async (...cmd) => {
+  if (STORAGE === "none") throw new Error("Supabase belum dihubungkan");
+  if (STORAGE === "local") return memRedis(...cmd);
+  return sbRedis(...cmd);
 };
 const getOrder = async (id) => {
   const v = await redis("GET", "order:" + id);
@@ -110,6 +251,55 @@ const getOrder = async (id) => {
 };
 const putOrder = (o) =>
   redis("SET", "order:" + o.id, JSON.stringify(o), "EX", 2592000);
+
+/* ---------- Stok & menu yang diatur admin ----------
+   Satu kunci Redis "cfg:stock" menyimpan:
+   off     : id menu yang habis
+   closed  : nama kategori yang ditutup
+   added   : menu baru dari admin [{id,c,n,p}]
+   removed : id menu bawaan (_menu.js) yang dihapus
+   food    : kategori makanan buatan admin (selain bawaan di dashboard)
+   nextId  : penghitung id; id yang pernah dipakai tidak dipakai lagi, jadi riwayat pesanan tetap benar */
+const BASE_MAX = BASE.reduce((m, x) => Math.max(m, x.id), 0);
+const getStockState = async () => {
+  let s = {};
+  // Error Redis sengaja dilempar (tidak ditelan). Kalau ditelan, admin menyimpan
+  // di atas konfigurasi kosong dan semua pengaturan stok lama hilang.
+  const v = await redis("GET", "cfg:stock");
+  try {
+    s = v ? JSON.parse(v) : {};
+  } catch (e) {
+    s = {};
+  }
+  const arr = (a) => (Array.isArray(a) ? a : []);
+  return {
+    off: arr(s.off).map(Number),
+    closed: arr(s.closed).map(String),
+    added: arr(s.added),
+    removed: arr(s.removed).map(Number),
+    food: arr(s.food).map(String),
+    nextId: Math.max(Number(s.nextId) || 0, BASE_MAX + 1),
+  };
+};
+const putStockState = (s) => redis("SET", "cfg:stock", JSON.stringify(s));
+// Menu gabungan: bawaan (tanpa yang dihapus) + tambahan admin. Item habis diberi off:true.
+const buildMenu = (s) =>
+  BASE.filter((m) => !s.removed.includes(m.id))
+    .concat(s.added)
+    .map((m) => (s.off.includes(m.id) ? { ...m, off: true } : { ...m }));
+const getMenu = async () => {
+  let s;
+  try {
+    s = await getStockState();
+  } catch (e) {
+    // Redis gagal: pelanggan tetap bisa melihat menu bawaan (hanya baca, tidak menyimpan apa pun)
+    console.error("stock state", e.message);
+    s = { off: [], closed: [], added: [], removed: [], food: [], nextId: 0 };
+  }
+  const menu = buildMenu(s);
+  const cats = new Set(menu.map((m) => m.c));
+  return { menu, closed: s.closed.filter((c) => cats.has(c)), food: s.food };
+};
 
 /* ---------- Meja: pemilik mengatur jumlah meja; tiap meja punya kode acak yang ditanam di QR-nya ----------
    Pelanggan tidak memilih meja. Server yang menentukan meja dari kode QR, jadi meja tidak bisa dipalsukan. */
@@ -161,6 +351,19 @@ const newId = () =>
     crypto.randomBytes(8),
     (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32],
   ).join("");
+const clean = (v, max) =>
+  String(v ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+// Rahasia per pesanan: hanya hash-nya yang disimpan di server
+const newSecret = () => crypto.randomBytes(24).toString("base64url"); // 32 karakter
+const SEC_RE = /^[A-Za-z0-9_-]{32}$/;
+const secOk = (o, s) =>
+  SEC_RE.test(String(s || "")) &&
+  !!o.sh &&
+  safeEq(sha(String(s), "sha256"), o.sh);
 const ip = (req) =>
   String(
     req.headers["x-real-ip"] ||
@@ -172,17 +375,15 @@ const ip = (req) =>
     .slice(0, 45);
 // Permintaan yang mengubah data wajib datang dari halaman situs ini sendiri (anti CSRF)
 const sameOrigin = (req) => {
+  const sf = req.headers["sec-fetch-site"];
+  if (sf && sf !== "same-origin") return false;
   try {
     return new URL(req.headers.origin).host === req.headers.host;
   } catch (e) {
     return false;
   }
 };
-const limit = async (key, max, sec) => {
-  const n = await redis("INCR", key);
-  if (n === 1) await redis("EXPIRE", key, sec);
-  return n <= max;
-};
+const limit = async (key, max, sec) => (await redis("INCREX", key, sec)) <= max;
 
 /* ---------- Login admin & sesi (cookie HttpOnly, disimpan di server, bisa dicabut) ---------- */
 const COOKIE = "qa_session",
@@ -265,10 +466,14 @@ async function sync(o) {
 }
 
 module.exports = {
+  STORAGE,
   MODE,
   MT,
   basic,
-  MENU,
+  getMenu,
+  getStockState,
+  putStockState,
+  buildMenu,
   SERVER_KEY,
   CLIENT_KEY,
   configError,
@@ -283,6 +488,9 @@ module.exports = {
   safeEq,
   ID_RE,
   newId,
+  newSecret, // <- tambah
+  secOk, // <- tambah
+  clean, // <- tambah
   ip,
   sameOrigin,
   limit,

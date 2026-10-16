@@ -36,6 +36,18 @@ let CODE = (new URLSearchParams(location.search).get("m") || "")
 try {
   ord = JSON.parse(localStorage.getItem(K) || "null");
 } catch (e) {}
+/* Keranjang: kunci "id" (menu biasa) atau "id:Varian" (menu panas/dingin/float). Harga dibaca dari menu, bukan disimpan di keranjang. */
+function lines() {
+  return Object.entries(cart)
+    .map(([key, q]) => {
+      const [id, k] = key.split(":"),
+        m = MENU.find((x) => x.id == id),
+        vr = k && m ? (m.v || []).find((z) => z.k == k) : null;
+      if (!m || (k && !vr)) return null;
+      return { m, k, q, p: vr ? vr.p : m.p, key };
+    })
+    .filter(Boolean);
+}
 const FIN = (s) => s == "done" || s == "failed",
   save = () => {
     try {
@@ -44,7 +56,7 @@ const FIN = (s) => s == "done" || s == "failed",
         : localStorage.removeItem(K);
     } catch (e) {}
   },
-  total = () => MENU.reduce((s, m) => s + (cart[m.id] || 0) * m.p, 0),
+  total = () => lines().reduce((s, l) => s + l.q * l.p, 0),
   toast = (t) => {
     const e = $("#msg");
     e.textContent = t;
@@ -52,15 +64,33 @@ const FIN = (s) => s == "done" || s == "failed",
     clearTimeout(toast.t);
     toast.t = setTimeout(() => (e.hidden = true), 4000);
   },
-  post = (u, b) =>
+  post = (u, b, h = {}) =>
     fetch(u, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...h },
       body: JSON.stringify(b),
     });
 
-const card = (m) =>
-  `<div class="mi"><span class="nm">${esc(m.n)}</span>${m.p > 0 ? `<span class="pc">${rp(m.p)}</span>${cart[m.id] ? `<div class="qty"><button data-a="m:${m.id}" aria-label="Kurangi">−</button><i>${cart[m.id]}</i><button data-a="p:${m.id}" aria-label="Tambah">+</button></div>` : `<button class="add" data-a="p:${m.id}">Tambah</button>`}` : `<span class="soon">Segera</span>`}</div>`;
+const na = (m) => m.off || (CFG.closed || []).includes(m.c);
+const ctl = (key) =>
+  cart[key]
+    ? `<div class="qty"><button data-a="m:${key}" aria-label="Kurangi">−</button><i>${cart[key]}</i><button data-a="p:${key}" aria-label="Tambah">+</button></div>`
+    : `<button class="add" data-a="p:${key}">Tambah</button>`;
+const card = (m) => {
+  const dead = na(m);
+  if (m.v && m.p > 0 && !dead)
+    return `<div class="mi var"><span class="nm">${esc(m.n)}</span><div class="vs">${m.v
+      .map(
+        (z) =>
+          `<div class="vr"><span class="vk">${esc(z.k)}</span><span class="pc">${rp(z.p)}</span>${ctl(m.id + ":" + z.k)}</div>`,
+      )
+      .join("")}</div></div>`;
+  return `<div class="mi${dead ? " off" : ""}"><span class="nm">${esc(m.n)}</span>${
+    m.p > 0 && !dead
+      ? `<span class="pc">${rp(m.p)}</span>${ctl(String(m.id))}`
+      : `<span class="soon">${m.p > 0 ? ((CFG.closed || []).includes(m.c) ? "Ditutup" : "Habis") : "Segera"}</span>`
+  }</div>`;
+};
 function hiV() {
   if (T)
     return `<div class="card hi"><b>${T == TAKE ? "Selamat datang!" : "Selamat datang, pelanggan " + esc(tl(T))}</b><p class="muted">${T == TAKE ? "Pesananmu untuk dibawa pulang." : "Pesananmu akan diantar ke meja ini. Tidak perlu memilih meja."}</p></div>`;
@@ -79,7 +109,7 @@ function menuV() {
       .filter((c) => cat == "Semua" || c == cat)
       .map(
         (c) =>
-          `<h2 class="cat">${esc(c)}</h2><div class="list">${MENU.filter(
+          `<h2 class="cat">${esc(c)}</h2>${(CFG.closed || []).includes(c) ? '<p class="muted center">Sedang ditutup</p>' : ""}<div class="list">${MENU.filter(
             (m) => m.c == c,
           )
             .map(card)
@@ -91,10 +121,10 @@ function menuV() {
 function coV() {
   return (
     `<h2>Pesananmu</h2>` +
-    MENU.filter((m) => cart[m.id])
+    lines()
       .map(
-        (m) =>
-          `<div class="row"><span>${cart[m.id]}x ${esc(m.n)}</span><b>${rp(cart[m.id] * m.p)}</b></div>`,
+        (l) =>
+          `<div class="row"><span>${l.q}x ${esc(l.m.n)}${l.k ? " (" + esc(l.k) + ")" : ""}</span><b>${rp(l.q * l.p)}</b></div>`,
       )
       .join("") +
     `<div class="row"><b>Total</b><b>${rp(total())}</b></div>
@@ -218,7 +248,7 @@ async function pay() {
   b.textContent = "Memproses...";
   try {
     const r = await post("/api/order", {
-      items: Object.entries(cart).map(([id, q]) => ({ id: +id, q })),
+      items: lines().map((l) => ({ id: l.m.id, v: l.k, q: l.q })),
       name: buyer.name,
       note: buyer.note,
       code: CODE,
@@ -232,6 +262,7 @@ async function pay() {
       table: T,
       name: buyer.name,
       items: [],
+      sec: j.sec,
       total: t,
     };
     cart = {};
@@ -241,6 +272,13 @@ async function pay() {
     poll();
     snapPay();
   } catch (e) {
+    if (e == 409) {
+      toast("Ada menu yang habis atau ditutup. Menu sudah diperbarui.");
+      return refresh().then(() => {
+        view = "menu";
+        paint();
+      });
+    }
     toast(
       e == 429
         ? "Terlalu banyak percobaan. Tunggu sebentar."
@@ -254,8 +292,11 @@ async function pay() {
 }
 async function sim(result) {
   try {
-    const r = await post("/api/mockpay", { id: ord.id, result });
-    if (!r.ok) throw 0;
+    await post(
+      "/api/mockpay",
+      { id: ord.id, result },
+      { "x-order-token": ord.sec },
+    );
   } catch (e) {
     toast("Simulasi gagal.");
   }
@@ -264,7 +305,9 @@ async function sim(result) {
 async function poll() {
   if (!ord || demo) return;
   try {
-    const r = await fetch("/api/order?id=" + encodeURIComponent(ord.id));
+    const r = await fetch("/api/order?id=" + encodeURIComponent(ord.id), {
+      headers: { "x-order-token": ord.sec || "" },
+    });
     if (r.ok) {
       ord = { ...ord, ...(await r.json()) };
       save();
@@ -272,10 +315,34 @@ async function poll() {
       ord = null;
       save();
       view = "menu";
+      return paint();
     }
   } catch (e) {}
   if (view == "track") paint();
 }
+let sig = "";
+/* Menu dimuat ulang tiap 30 detik agar stok habis dan kategori tutup langsung berlaku */
+async function refresh() {
+  if (demo) return;
+  try {
+    const r = await fetch("/api/menu");
+    if (!r.ok) return;
+    const j = await r.json(),
+      s = JSON.stringify([j.menu, j.closed]);
+    if (s == sig) return;
+    sig = s;
+    CFG = { ...CFG, ...j };
+    MENU = j.menu;
+    Object.keys(cart).forEach((key) => {
+      const [id, k] = key.split(":"),
+        m = MENU.find((x) => x.id == id);
+      if (!m || na(m) || (k && !(m.v || []).some((z) => z.k == k)))
+        delete cart[key];
+    });
+    if (view != "track") paint();
+  } catch (e) {}
+}
+setInterval(refresh, 30000);
 async function init() {
   const tf = CODE
     ? fetch("/api/table?c=" + encodeURIComponent(CODE)).catch(() => null)
@@ -285,6 +352,7 @@ async function init() {
     if (!r.ok) throw 0;
     CFG = await r.json();
     MENU = CFG.menu;
+    sig = JSON.stringify([MENU, CFG.closed]);
     if (t && t.ok) T = (await t.json()).t;
   } catch (e) {
     demo = true;
