@@ -329,10 +329,56 @@ const listOrders = async (since = 0, cap = 5000) => {
    food    : kategori makanan buatan admin (selain bawaan di dashboard)
    nextId  : penghitung id; id yang pernah dipakai tidak dipakai lagi, jadi riwayat pesanan tetap benar */
 const BASE_MAX = BASE.reduce((m, x) => Math.max(m, x.id), 0);
+/* Daftar menu disimpan di tabel menu_items (Supabase). Tanpa Supabase (lokal) disimpan di kunci "cfg:items".
+   Kalau tabel masih kosong atau belum dibuat, dipakai menu bawaan _menu.js (hanya baca) sampai admin menyimpan. */
+const rowToItem = (r) => {
+  const m = { id: r.id, c: r.c, n: r.n, p: r.p };
+  if (Array.isArray(r.v) && r.v.length)
+    m.v = r.v.map((z) => ({ k: z.k, p: z.p, ...(z.off ? { off: true } : {}) }));
+  if (r.off) m.off = true;
+  return m;
+};
+const loadItems = async () => {
+  // Error dilempar (tidak ditelan): kalau ditelan, admin bisa menimpa menu di database dengan menu bawaan.
+  if (STORAGE === "supabase") {
+    const rows = await sb(
+      "GET",
+      "menu_items?select=*&order=pos.asc,id.asc&limit=1000",
+    );
+    return Array.isArray(rows) && rows.length ? rows.map(rowToItem) : null;
+  }
+  const v = await redis("GET", "cfg:items");
+  try {
+    const a = v ? JSON.parse(v) : null;
+    return Array.isArray(a) && a.length ? a : null;
+  } catch (e) {
+    return null;
+  }
+};
+const saveItems = async (items) => {
+  if (STORAGE !== "supabase")
+    return redis("SET", "cfg:items", JSON.stringify(items));
+  const now = new Date().toISOString();
+  const rows = items.map((m, i) => ({
+    id: m.id,
+    c: m.c,
+    n: m.n,
+    p: m.p,
+    v: m.v || null,
+    off: !!m.off,
+    pos: i + 1,
+    updated_at: now,
+  }));
+  await sb("POST", "menu_items?on_conflict=id", rows, {
+    Prefer: "resolution=merge-duplicates,return=minimal",
+  });
+  await sb(
+    "DELETE",
+    `menu_items?id=not.in.(${items.map((m) => m.id).join(",")})`,
+  );
+};
 const getStockState = async () => {
   let s = {};
-  // Error Redis sengaja dilempar (tidak ditelan). Kalau ditelan, admin menyimpan
-  // di atas konfigurasi kosong dan semua pengaturan stok lama hilang.
   const v = await redis("GET", "cfg:stock");
   try {
     s = v ? JSON.parse(v) : {};
@@ -340,29 +386,56 @@ const getStockState = async () => {
     s = {};
   }
   const arr = (a) => (Array.isArray(a) ? a : []);
+  let items = await loadItems();
+  if (!items) items = BASE.map((m) => ({ ...m })); // tabel masih kosong: pakai menu bawaan sampai admin menyimpan
+  /* Migrasi format lama: dulu menu habis (off), menu tambahan (added), dan menu terhapus (removed) disimpan
+     di cfg:stock. Digabung di memori; tersimpan ke tabel pada penyimpanan admin berikutnya. */
+  const rem = arr(s.removed).map(Number),
+    off = arr(s.off).map(Number),
+    add = arr(s.added);
+  if (rem.length || off.length || add.length) {
+    items = items.filter((m) => !rem.includes(m.id));
+    for (const a of add)
+      if (a && !items.some((m) => m.id === a.id))
+        items.push({ id: a.id, c: a.c, n: a.n, p: a.p });
+    items = items.map((m) => (off.includes(m.id) ? { ...m, off: true } : m));
+  }
+  const maxId = items.reduce((m, x) => Math.max(m, x.id), BASE_MAX);
   return {
-    off: arr(s.off).map(Number),
+    items,
     closed: arr(s.closed).map(String),
-    added: arr(s.added),
-    removed: arr(s.removed).map(Number),
     food: arr(s.food).map(String),
-    nextId: Math.max(Number(s.nextId) || 0, BASE_MAX + 1),
+    nextId: Math.max(Number(s.nextId) || 0, maxId + 1),
   };
 };
-const putStockState = (s) => redis("SET", "cfg:stock", JSON.stringify(s));
-// Menu gabungan: bawaan (tanpa yang dihapus) + tambahan admin. Item habis diberi off:true.
+// daftar menu ke tabel menu_items; kategori ditutup, kategori makanan, dan nextId tetap di kv (cfg:stock)
+const putStockState = async (s) => {
+  await saveItems(s.items);
+  await redis(
+    "SET",
+    "cfg:stock",
+    JSON.stringify({ closed: s.closed, food: s.food, nextId: s.nextId }),
+  );
+};
+// Menu gabungan. Harga item bervarian = varian tersedia termurah; semua varian habis = item habis.
 const buildMenu = (s) =>
-  BASE.filter((m) => !s.removed.includes(m.id))
-    .concat(s.added)
-    .map((m) => (s.off.includes(m.id) ? { ...m, off: true } : { ...m }));
+  s.items.map((m) => {
+    const o = { ...m };
+    if (o.v && o.v.length) {
+      const ok = o.v.filter((z) => !z.off);
+      if (!ok.length) o.off = true;
+      else o.p = Math.min(...ok.map((z) => z.p));
+    }
+    return o;
+  });
 const getMenu = async () => {
   let s;
   try {
     s = await getStockState();
   } catch (e) {
-    // Redis gagal: pelanggan tetap bisa melihat menu bawaan (hanya baca, tidak menyimpan apa pun)
+    // database gagal: pelanggan tetap melihat menu bawaan (hanya baca, tidak menyimpan apa pun)
     console.error("stock state", e.message);
-    s = { off: [], closed: [], added: [], removed: [], food: [], nextId: 0 };
+    s = { items: BASE.map((m) => ({ ...m })), closed: [], food: [], nextId: 0 };
   }
   const menu = buildMenu(s);
   const cats = new Set(menu.map((m) => m.c));

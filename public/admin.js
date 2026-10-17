@@ -76,7 +76,8 @@ let orders = [], // gabungan antrian langsung + arsip (untuk statistik, riwayat,
   sf = "all",
   lastOk = 0,
   failed = false,
-  nf = { n: "", c: "", p: "", j: "drink" },
+  nf = { n: "", c: "", p: "", j: "drink", t: "one", h: "", d: "", f: "" },
+  ef = null, // menu yang sedang diubah: { id, t, p, h, d, f }
   printChain = Promise.resolve();
 try {
   base = localStorage.getItem("qahwa_qr_base") || "";
@@ -165,7 +166,7 @@ function queueV() {
           .map((o) => {
             const m = mins(o),
               late = o.status == "paid" && m >= 10;
-            return `<div class="card${late ? " late" : ""}"><div class="split"><b class="tbl">${esc(tl(o.table))}</b><span class="chip ${o.status}">${LBL[o.status]}</span></div><div class="muted">${esc(o.id)}, ${esc(o.name)}, ${hm(o.ts)} <span class="age">(${m} mnt)</span></div><div>${(o.items || []).map((i) => i.q + "× " + esc(i.n)).join("<br>")}</div>${o.note ? `<div class="muted">Catatan: ${esc(o.note)}</div>` : ""}<div class="split"><b>${rp(o.total)}</b><span class="acts no"><button class="btn ghost sm" data-pr="${esc(o.id)}">Cetak</button><button class="btn sm" data-id="${esc(o.id)}" data-s="${NEXT[o.status][0]}">${NEXT[o.status][1]}</button></span></div></div>`;
+            return `<div class="card${late ? " late" : ""}"><div class="split"><b class="tbl">${esc(tl(o.table))}</b><span class="chip ${o.status}">${LBL[o.status]}</span></div><div class="muted">${esc(o.id)}, ${esc(o.name)}, ${hm(o.ts)} <span class="age">(${m} mnt)</span></div><div>${(o.items || []).map((i) => i.q + "× " + vName(i)).join("<br>")}</div>${o.note ? `<div class="muted">Catatan: ${esc(o.note)}</div>` : ""}<div class="split"><b>${rp(o.total)}</b><span class="acts no"><button class="btn ghost sm" data-pr="${esc(o.id)}">Cetak</button><button class="btn sm" data-id="${esc(o.id)}" data-s="${NEXT[o.status][0]}">${NEXT[o.status][1]}</button></span></div></div>`;
           })
           .join("")
       : `<p class="muted">Tidak ada pesanan di antrian ini.</p>`);
@@ -184,10 +185,12 @@ function statV() {
   const l = paidIn(rng),
     rev = sum(l),
     items = {},
-    tbs = {};
+    tbs = {},
+    vc = {};
   l.forEach((o) => {
     tbs[tl(o.table)] = (tbs[tl(o.table)] || 0) + 1;
     (o.items || []).forEach((i) => {
+      if (i.v) vc[i.v] = (vc[i.v] || 0) + num(i.q);
       items[i.n] = items[i.n] || [0, 0];
       items[i.n][0] += num(i.q);
       items[i.n][1] += num(i.q) * num(i.p);
@@ -226,6 +229,10 @@ function statV() {
 <div class="card"><b>Pendapatan ${rng == "today" ? "per jam" : "per hari"}</b>${rev ? sub(rng == "today" ? "Jam tersibuk: " + String(peak).padStart(2, "0") + ":00" : "Hari terbaik: " + rp(mx)) : ""}<div class="bars" role="img" aria-label="Grafik pendapatan">${bars.map((v, i) => `<i class="${v ? "" : "z"}" style="height:${(v / mx) * 100}%" title="${rp(v)}"></i>`).join("")}</div><div class="axis">${lab.map((x) => `<span>${x}</span>`).join("")}</div></div>
 <div class="card"><b>Menu terlaris</b>${rank(
     top.map(([n, v]) => [n, v[0]]),
+    (v) => v + "×",
+  )}</div>
+<div class="card"><b>Panas, Dingin, Float</b>${rank(
+    Object.entries(vc).sort((a, b) => b[1] - a[1]),
     (v) => v + "×",
   )}</div>
 <div class="card"><b>Meja paling aktif</b>${rank(tb, (v) => v + " pesanan")}</div>`;
@@ -291,7 +298,10 @@ const loadJs = (src) =>
     const s = document.createElement("script");
     s.src = src;
     s.onload = ok;
-    s.onerror = () => no(new Error(src));
+    s.onerror = () => {
+      s.remove();
+      no(new Error(src));
+    };
     document.head.appendChild(s);
   });
 async function exportPdf() {
@@ -370,7 +380,9 @@ async function exportPdf() {
     doc.save("qahwa-pesanan-" + new Date().toLocaleDateString("sv") + ".pdf");
   } catch (e) {
     alert(
-      "Gagal membuat PDF. Pastikan file vendor/jspdf.umd.min.js dan vendor/jspdf.plugin.autotable.min.js ada di server.",
+      "Gagal membuat PDF (" +
+        String((e && e.message) || e).slice(0, 80) +
+        "). Pastikan file vendor/jspdf.umd.min.js dan vendor/jspdf.plugin.autotable.min.js ada di server.",
     );
   }
   b.disabled = false;
@@ -421,6 +433,59 @@ function printReceipt(o) {
       }),
   ));
 }
+
+/* ---------- Varian Panas / Dingin / Float ---------- */
+const VT = {
+  one: "Satu harga",
+  hd: "Panas & Dingin",
+  hdf: "Panas, Dingin & Float",
+};
+// nama dasar tanpa akhiran " (Panas)" yang ditambahkan server pada item pesanan bervarian
+const vBase = (i) =>
+  i.v ? String(i.n).replace(new RegExp("\\s*\\(" + i.v + "\\)$"), "") : i.n;
+// nama item + penanda varian berwarna (dipakai di antrian dapur)
+const vName = (i) =>
+  esc(vBase(i)) +
+  (i.v
+    ? ` <span class="chip v-${esc(String(i.v).toLowerCase())}">${esc(i.v)}</span>`
+    : "");
+const vList = (s) =>
+  s.t == "one"
+    ? null
+    : [
+        { k: "Panas", p: Math.round(Number(s.h)) },
+        { k: "Dingin", p: Math.round(Number(s.d)) },
+        ...(s.t == "hdf" ? [{ k: "Float", p: Math.round(Number(s.f)) }] : []),
+      ];
+const vOk = (v) => v.every((z) => z.p >= 1 && z.p <= 1e6);
+// kolom harga: satu harga atau per varian. a = awalan id ("a" tambah, "e" ubah)
+const priceBox = (s, a) =>
+  `<label>Jenis harga<select id="${a}t">${Object.entries(VT)
+    .map(
+      ([k, v]) =>
+        `<option value="${k}"${k == s.t ? " selected" : ""}>${v}</option>`,
+    )
+    .join("")}</select></label>` +
+  (s.t == "one"
+    ? `<label>Harga (Rp${a == "a" ? ', isi 0 untuk "Segera"' : ""})<input id="${a}p" type="number" min="0" max="1000000" inputmode="numeric" value="${esc(s.p)}" placeholder="20000"></label>`
+    : `<div class="vgrid"><label>Panas (Rp)<input id="${a}h" type="number" min="1" max="1000000" inputmode="numeric" value="${esc(s.h)}" placeholder="17000"></label><label>Dingin (Rp)<input id="${a}d" type="number" min="1" max="1000000" inputmode="numeric" value="${esc(s.d)}" placeholder="20000"></label>${s.t == "hdf" ? `<label>Float (Rp)<input id="${a}f" type="number" min="1" max="1000000" inputmode="numeric" value="${esc(s.f)}" placeholder="25000"></label>` : ""}</div>`);
+const fromItem = (m) => {
+  const g = (k) => ((m.v || []).find((z) => z.k == k) || {}).p;
+  return {
+    id: m.id,
+    t: m.v ? (g("Float") ? "hdf" : "hd") : "one",
+    p: m.v ? "" : String(m.p || 0),
+    h: g("Panas") ?? "",
+    d: g("Dingin") ?? "",
+    f: g("Float") ?? "",
+  };
+};
+const priceTxt = (m) =>
+  m.v
+    ? m.v.map((z) => `${z.k} ${rp(z.p)}`).join(" · ")
+    : m.p > 0
+      ? rp(m.p)
+      : "Segera";
 
 /* ---------- Tab Stok: menu habis, tutup kategori, tutup semua makanan atau minuman ---------- */
 async function loadStock() {
@@ -478,7 +543,7 @@ ${grp(
 <div class="card"><label>Nama menu<input id="an" maxlength="60" value="${esc(nf.n)}" placeholder="Contoh: Kopi Susu Gula Aren" autocomplete="off"></label>
 <label>Kategori<input id="ac" list="cl" maxlength="30" value="${esc(nf.c)}" placeholder="Pilih atau ketik kategori baru" autocomplete="off"></label><datalist id="cl">${cats.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
 <label>Jenis (dipakai untuk kategori baru)<select id="aj"><option value="drink"${nf.j == "drink" ? " selected" : ""}>Minuman</option><option value="food"${nf.j == "food" ? " selected" : ""}>Makanan</option></select></label>
-<label>Harga (Rp, isi 0 untuk "Segera")<input id="ap" type="number" min="0" max="1000000" inputmode="numeric" value="${esc(nf.p)}" placeholder="20000"></label>
+${priceBox(nf, "a")}
 <button class="btn" id="addm">Tambah menu</button><div id="smsg"></div></div>
 <h2>Daftar menu</h2>
 <label>Cari menu<input id="sq" value="${esc(sq)}" placeholder="Nama menu" autocomplete="off"></label>${pills("data-sf", { all: "Semua", ok: "Tersedia", off: "Habis" }, sf)}<div id="sl"></div>`;
@@ -492,11 +557,17 @@ const smsg = (t, bad) => {
 async function addMenu() {
   const n = nf.n.trim().replace(/\s+/g, " "),
     c = nf.c.trim().replace(/\s+/g, " "),
+    v = vList(nf),
     p = Math.round(Number(nf.p === "" ? NaN : nf.p));
   if (!n) return smsg("Nama menu wajib diisi.", 1);
   if (!c) return smsg("Kategori wajib diisi.", 1);
-  if (!(p >= 0 && p <= 1e6))
-    return smsg("Harga harus angka 0 sampai 1.000.000.", 1);
+  if (v ? !vOk(v) : !(p >= 0 && p <= 1e6))
+    return smsg(
+      v
+        ? "Harga tiap varian harus angka 1 sampai 1.000.000."
+        : "Harga harus angka 0 sampai 1.000.000.",
+      1,
+    );
   const dupe = stock.menu.some(
     (m) =>
       m.c.toLowerCase() == c.toLowerCase() &&
@@ -509,19 +580,46 @@ async function addMenu() {
   try {
     const j = await api(
       "POST",
-      { action: "add", n, c, p, food: nf.j == "food" },
+      { action: "add", n, c, food: nf.j == "food", ...(v ? { v } : { p }) },
       "/api/stock",
     );
     if (!Array.isArray(j.menu)) throw 0;
     stock = { ...stock, ...j };
     syncFood();
-    nf = { n: "", c: "", p: "", j: nf.j };
+    nf = { n: "", c: "", p: "", j: nf.j, t: "one", h: "", d: "", f: "" };
     stokV();
     smsg('Menu "' + n + '" ditambahkan ke ' + c + ".");
   } catch (e) {
     if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
     b.disabled = false;
     smsg("Gagal menambah menu. Coba lagi.", 1);
+  }
+}
+async function saveEdit() {
+  const m = ef && stock.menu.find((x) => x.id == ef.id);
+  if (!m) return;
+  const v = vList(ef),
+    p = Math.round(Number(ef.p === "" ? NaN : ef.p));
+  if (v ? !vOk(v) : !(p >= 0 && p <= 1e6))
+    return alert(
+      v
+        ? "Harga tiap varian harus angka 1 sampai 1.000.000."
+        : "Harga harus angka 0 sampai 1.000.000.",
+    );
+  try {
+    const j = await api(
+      "POST",
+      { action: "edit", id: m.id, ...(v ? { v } : { p }) },
+      "/api/stock",
+    );
+    if (!Array.isArray(j.menu)) throw 0;
+    stock = { ...stock, ...j };
+    ef = null;
+    stokV();
+    smsg('Harga "' + m.n + '" disimpan.');
+  } catch (e) {
+    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    alert("Gagal menyimpan harga. Coba lagi.");
   }
 }
 async function delMenu(id) {
@@ -554,17 +652,33 @@ function sList() {
   if (!el) return;
   const cl = closedSet(),
     q = sq.toLowerCase(),
+    anyOff = (m) => !!m.off || (m.v || []).some((z) => z.off),
     ok = (m) =>
-      (sf == "all" || (sf == "off") == !!m.off) &&
+      (sf == "all" || (sf == "off") == anyOff(m)) &&
       (!q || m.n.toLowerCase().includes(q)),
-    cats = [...new Set(stock.menu.map((m) => m.c))];
+    cats = [...new Set(stock.menu.map((m) => m.c))],
+    acts = (m) =>
+      `<button class="del" data-ed="${m.id}" aria-label="Ubah harga ${esc(m.n)}">${ef && ef.id == m.id ? "Tutup" : "Ubah"}</button><button class="del" data-del="${m.id}" aria-label="Hapus ${esc(m.n)}">Hapus</button>`,
+    editBox = (m) =>
+      ef && ef.id == m.id
+        ? `<div class="ebox">${priceBox(ef, "e")}<div class="acts"><button class="btn sm" id="edsave">Simpan harga</button><button class="btn ghost sm" id="edcancel">Batal</button></div></div>`
+        : "",
+    row = (m, x) =>
+      m.v
+        ? `<div class="vgrp${m.off || x ? " offr" : ""}"><div class="split"><b>${esc(m.n)}</b><span class="acts">${acts(m)}</span></div>${m.v
+            .map(
+              (z) =>
+                `<div class="srow${z.off || x ? " offr" : ""}"><span>${esc(z.k)} <span class="muted">${rp(z.p)}</span></span><button class="tg${z.off ? "" : " on"}" data-st="${m.id}" data-k="${esc(z.k)}" data-off="${z.off ? 0 : 1}" aria-pressed="${!z.off}">${z.off ? "Habis" : "Tersedia"}</button></div>`,
+            )
+            .join("")}${editBox(m)}</div>`
+        : `<div class="srow${m.off || x ? " offr" : ""}"><span>${esc(m.n)} <span class="muted">${priceTxt(m)}</span></span><button class="tg${m.off ? "" : " on"}" data-st="${m.id}" data-off="${m.off ? 0 : 1}" aria-pressed="${!m.off}">${m.off ? "Habis" : "Tersedia"}</button>${acts(m)}</div>${editBox(m)}`;
   el.innerHTML =
     cats
       .map((c) => {
         const l = stock.menu.filter((m) => m.c == c && ok(m)),
           x = cl.has(c);
         return l.length || (!q && sf == "all")
-          ? `<div class="split"><h3 class="dh">${esc(c)}${x ? ' <span class="chip">Ditutup</span>' : ""}</h3><button class="btn ghost sm" data-cat="${esc(c)}" data-cl="${x ? 0 : 1}">${x ? "Buka kategori" : "Tutup kategori"}</button></div><div class="card">${l.map((m) => `<div class="srow${m.off || x ? " offr" : ""}"><span>${esc(m.n)} <span class="muted">${rp(m.p)}</span></span><button class="tg${m.off ? "" : " on"}" data-st="${m.id}" data-off="${m.off ? 0 : 1}" aria-pressed="${!m.off}">${m.off ? "Habis" : "Tersedia"}</button><button class="del" data-del="${m.id}" aria-label="Hapus ${esc(m.n)}">Hapus</button></div>`).join("") || '<p class="muted">Tidak ada menu.</p>'}</div>`
+          ? `<div class="split"><h3 class="dh">${esc(c)}${x ? ' <span class="chip">Ditutup</span>' : ""}</h3><button class="btn ghost sm" data-cat="${esc(c)}" data-cl="${x ? 0 : 1}">${x ? "Buka kategori" : "Tutup kategori"}</button></div><div class="card">${l.map((m) => row(m, x)).join("") || '<p class="muted">Tidak ada menu.</p>'}</div>`
           : "";
       })
       .join("") || '<p class="muted">Tidak ada menu yang cocok.</p>';
@@ -574,7 +688,15 @@ async function setStock(body) {
   if (body.cats)
     body.cats.forEach((c) => (body.closed ? cl.add(c) : cl.delete(c)));
   if (body.id != null)
-    stock.menu.forEach((m) => m.id == body.id && (m.off = !!body.off));
+    stock.menu.forEach((m) => {
+      if (m.id != body.id) return;
+      if (body.k) {
+        (m.v || []).forEach((z) => {
+          if (z.k == body.k) body.off ? (z.off = true) : delete z.off;
+        });
+        m.off = (m.v || []).every((z) => z.off);
+      } else m.off = !!body.off;
+    });
   stock.closed = [...cl];
   stokV();
   try {
@@ -813,8 +935,22 @@ document.addEventListener("click", async (e) => {
   } else if (f) {
     qf = f.dataset.f;
     queueV();
-  } else if (st) setStock({ id: +st.dataset.st, off: st.dataset.off == "1" });
-  else if (cc)
+  } else if (st)
+    setStock({
+      id: +st.dataset.st,
+      ...(st.dataset.k ? { k: st.dataset.k } : {}),
+      off: st.dataset.off == "1",
+    });
+  else if (t.closest("[data-ed]")) {
+    const id = +t.closest("[data-ed]").dataset.ed,
+      m = stock.menu.find((x) => x.id == id);
+    ef = ef && ef.id == id ? null : m ? fromItem(m) : null;
+    sList();
+  } else if (t.id == "edsave") saveEdit();
+  else if (t.id == "edcancel") {
+    ef = null;
+    sList();
+  } else if (cc)
     setStock({ cats: [cc.dataset.cat], closed: cc.dataset.cl == "1" });
   else if (gp) {
     const cats = [...new Set(stock.menu.map((m) => m.c))].filter(
@@ -848,14 +984,26 @@ document.addEventListener("change", (e) => {
     } catch (x) {}
     drawQR();
   }
+  if (e.target.id == "at") {
+    nf.t = e.target.value;
+    stokV();
+  }
+  if (e.target.id == "et" && ef) {
+    ef.t = e.target.value;
+    sList();
+  }
   if (e.target.id == "hs") {
     hs = e.target.value;
     histList();
   }
 });
 document.addEventListener("input", (e) => {
-  const k = { an: "n", ac: "c", ap: "p", aj: "j" }[e.target.id];
+  const k = { an: "n", ac: "c", ap: "p", aj: "j", ah: "h", ad: "d", af: "f" }[
+      e.target.id
+    ],
+    k2 = { ep: "p", eh: "h", ed: "d", ef: "f" }[e.target.id];
   if (k) nf[k] = e.target.value;
+  if (k2 && ef) ef[k2] = e.target.value;
   if (e.target.id == "sq") {
     sq = e.target.value.trim();
     sList();

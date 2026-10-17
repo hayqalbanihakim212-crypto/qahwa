@@ -237,3 +237,46 @@
   display: flex;
   gap: var(--s2);
 }
+
+/* menu bervarian (Panas / Dingin / Float) di tab Stok */
+.vgrp {
+  padding: 10px 0;
+  border-bottom: 1px dotted rgba(233, 166, 59, 0.3);
+}
+.vgrp:last-child {
+  border-bottom: 0;
+}
+.vgrp .srow {
+  padding: 6px 0 6px var(--s4);
+  border-bottom: 0;
+}
+.vgrp.offr > .split > b {
+  opacity: 0.55;
+}
+.vgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0 var(--s2);
+}
+.ebox {
+  padding: 4px 0 12px;
+}
+.ebox .acts {
+  margin-top: var(--s2);
+}
+.srow {
+  flex-wrap: wrap;
+}
+/* penanda varian di antrian dapur */
+.chip.v-panas {
+  background: #ff9d5c;
+  color: #111;
+}
+.chip.v-dingin {
+  background: #6cc3ff;
+  color: #111;
+}
+.chip.v-float {
+  background: #f6e7b4;
+  color: #111;
+}

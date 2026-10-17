@@ -444,3 +444,11 @@ input::placeholder {
   color: var(--muted);
   font-size: var(--fs-s);
 }
+/* varian habis di menu pelanggan */
+.mi .vr.off .vk {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.mi .vr .soon {
+  margin-left: auto;
+}

@@ -43,7 +43,7 @@ function lines() {
       const [id, k] = key.split(":"),
         m = MENU.find((x) => x.id == id),
         vr = k && m ? (m.v || []).find((z) => z.k == k) : null;
-      if (!m || (k && !vr)) return null;
+      if (!m || (k && (!vr || vr.off))) return null;
       return { m, k, q, p: vr ? vr.p : m.p, key };
     })
     .filter(Boolean);
@@ -82,7 +82,7 @@ const card = (m) => {
     return `<div class="mi var"><span class="nm">${esc(m.n)}</span><div class="vs">${m.v
       .map(
         (z) =>
-          `<div class="vr"><span class="vk">${esc(z.k)}</span><span class="pc">${rp(z.p)}</span>${ctl(m.id + ":" + z.k)}</div>`,
+          `<div class="vr${z.off ? " off" : ""}"><span class="vk">${esc(z.k)}</span>${z.off ? '<span class="soon">Habis</span>' : `<span class="pc">${rp(z.p)}</span>${ctl(m.id + ":" + z.k)}`}</div>`,
       )
       .join("")}</div></div>`;
   return `<div class="mi${dead ? " off" : ""}"><span class="nm">${esc(m.n)}</span>${
@@ -336,7 +336,7 @@ async function refresh() {
     Object.keys(cart).forEach((key) => {
       const [id, k] = key.split(":"),
         m = MENU.find((x) => x.id == id);
-      if (!m || na(m) || (k && !(m.v || []).some((z) => z.k == k)))
+      if (!m || na(m) || (k && !(m.v || []).some((z) => z.k == k && !z.off)))
         delete cart[key];
     });
     if (view != "track") paint();

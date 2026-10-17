@@ -61,7 +61,8 @@ module.exports = async (req, res) => {
       if (m.v) {
         // menu bervarian: varian wajib dipilih dan harus ada di daftar server
         const vr = m.v.find((z) => z.k === x.v);
-        if (!vr) return res.status(409).json({ error: "unavailable" });
+        if (!vr || vr.off)
+          return res.status(409).json({ error: "unavailable" });
         p = vr.p;
         n = `${m.n} (${vr.k})`;
         vk = vr.k;
