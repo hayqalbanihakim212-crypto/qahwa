@@ -46,8 +46,8 @@ const configError = () => {
 const BASE = require("./_menu"); // menu bawaan (statis). Perubahan admin disimpan di Redis, bukan di file ini.
 
 /* ---------- Penyimpanan: Supabase; tanpa Supabase hanya boleh di komputer lokal (memori sementara) ---------- */
-const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-const SK = process.env.SUPABASE_SERVICE_ROLE_KEY || ""; // hanya di server, jangan pernah dikirim ke browser
+const SB = (process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+const SK = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim(); // hanya di server, jangan pernah dikirim ke browser; spasi tempelan dibuang
 /* Mode penyimpanan:
    - "supabase": SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY terisi.
    - "local"   : tanpa Supabase (pengembangan). Data disimpan di file .data/local.json di komputer ini,
@@ -251,8 +251,74 @@ const getOrder = async (id) => {
   const v = await redis("GET", "order:" + id);
   return v ? JSON.parse(v) : null;
 };
-const putOrder = (o) =>
-  redis("SET", "order:" + o.id, JSON.stringify(o), "EX", 2592000);
+/* Arsip permanen: tiap perubahan pesanan juga disalin ke tabel "orders" di Supabase (dibuat oleh
+   supabase_orders.sql). Kalau arsip gagal, pesanan pelanggan tetap jalan; kesalahan dicatat di log. */
+const archive = async (o) => {
+  if (STORAGE !== "supabase") return;
+  try {
+    await sb(
+      "POST",
+      "orders?on_conflict=id",
+      {
+        id: o.id,
+        ts: Math.floor(Number(o.ts)) || Date.now(),
+        status: String(o.status),
+        tbl: o.table == null ? null : String(o.table),
+        name: o.name || null,
+        note: o.note || null,
+        total: Math.round(Number(o.total)) || 0,
+        items: Array.isArray(o.items) ? o.items : [],
+        updated_at: new Date().toISOString(),
+      },
+      { Prefer: "resolution=merge-duplicates" },
+    );
+  } catch (e) {
+    console.error("arsip pesanan gagal:", e.message);
+  }
+};
+const putOrder = async (o) => {
+  await redis("SET", "order:" + o.id, JSON.stringify(o), "EX", 2592000);
+  await archive(o);
+};
+/* Daftar pesanan sejak waktu tertentu (milidetik), terbaru dulu, untuk Statistik dan Riwayat admin.
+   Supabase: dari arsip permanen (maks 5000 baris). Mode lokal: dari 500 pesanan terbaru. */
+const listOrders = async (since = 0, cap = 5000) => {
+  since = Math.max(0, Math.floor(Number(since)) || 0);
+  if (STORAGE !== "supabase") {
+    const ids = await redis("LRANGE", "orders", 0, 499);
+    const vals = ids.length
+      ? await redis("MGET", ...ids.map((i) => "order:" + i))
+      : [];
+    return vals
+      .filter(Boolean)
+      .map((v) => {
+        const o = JSON.parse(v);
+        delete o.sh;
+        return o;
+      })
+      .filter((o) => Number(o.ts) >= since);
+  }
+  const out = [];
+  for (let off = 0; off < cap; off += 1000) {
+    const rows = await sb(
+      "GET",
+      `orders?ts=gte.${since}&select=id,ts,status,tbl,name,note,total,items&order=ts.desc&offset=${off}&limit=1000`,
+    );
+    for (const r of rows)
+      out.push({
+        id: r.id,
+        ts: Number(r.ts),
+        status: r.status,
+        table: r.tbl,
+        name: r.name || "",
+        note: r.note || "",
+        total: r.total,
+        items: r.items || [],
+      });
+    if (rows.length < 1000) break;
+  }
+  return out;
+};
 
 /* ---------- Stok & menu yang diatur admin ----------
    Satu kunci Redis "cfg:stock" menyimpan:
@@ -503,4 +569,5 @@ module.exports = {
   isAdmin,
   applyMidtrans,
   sync,
+  listOrders,
 };
