@@ -6,6 +6,7 @@ const {
   isAdmin,
   sameOrigin,
   ID_RE,
+  listOrders,
 } = require("./_lib");
 const NEXT = { paid: "making", making: "ready", ready: "done" }; // alur hanya maju satu langkah
 module.exports = async (req, res) => {
@@ -23,6 +24,12 @@ module.exports = async (req, res) => {
       return res.json({ ok: 1 });
     }
     if (req.method !== "GET") return res.status(405).end();
+    // arsip permanen untuk Statistik dan Riwayat: /api/admin?hist=1&since=<ms>
+    if (req.query && req.query.hist !== undefined)
+      return res.json({
+        mode: MODE,
+        orders: await listOrders(req.query.since),
+      });
     const ids = await redis("LRANGE", "orders", 0, 99);
     const vals = ids.length
       ? await redis("MGET", ...ids.map((i) => "order:" + i))

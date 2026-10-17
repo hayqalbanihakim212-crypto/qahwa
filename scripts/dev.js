@@ -7,7 +7,7 @@ const http = require("http"),
 const envFile = path.join(__dirname, "../.env");
 let envInfo = "";
 try {
-  const text = fs.readFileSync(envFile, "utf8").replace(/^/, "");
+  const text = fs.readFileSync(envFile, "utf8").replace(/^\uFEFF/, "");
   let n = 0;
   for (const raw of text.split(/\r?\n/)) {
     const m = raw

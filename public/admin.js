@@ -10,7 +10,18 @@ const $ = (s) => document.querySelector(s),
   dm = (t) =>
     new Date(t).toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
 /* Kategori yang dianggap makanan; kategori lain dianggap minuman. Sesuaikan dengan menu kamu. */
-const FOOD_BASE = ["Makanan", "Crispy", "Tambahan"],
+const FOOD_BASE = [
+    "Nasi Goreng",
+    "Nasi Goreng Kampung",
+    "Nasi Goreng Ijo",
+    "Nasi Goreng Pataya",
+    "Crispy",
+    "Chicken Katsu",
+    "Martabak",
+    "Kue/Mie Tiaw",
+    "Toom Yum",
+    "Roti Canai",
+  ],
   FOOD = [...FOOD_BASE];
 /* Kategori makanan buatan admin disimpan di server (stock.food) dan digabung ke daftar FOOD. */
 const syncFood = () =>
@@ -42,7 +53,11 @@ const NEXT = {
   TAKE = "Bawa pulang",
   tl = (t) => (t == TAKE ? TAKE : "Meja " + t),
   num = (v) => Number(v) || 0;
-let orders = [],
+let orders = [], // gabungan antrian langsung + arsip (untuk statistik, riwayat, pendapatan)
+  live = [], // 100 pesanan terbaru dari server, diperbarui tiap 5 detik
+  arch = [], // arsip permanen dari tabel orders
+  archKey = "",
+  archAt = 0,
   seen = null,
   timer = null,
   mode = "",
@@ -138,12 +153,12 @@ function rank(rows, fmt) {
 
 /* ---------- Tab Antrian ---------- */
 function queueV() {
-  const act = orders.filter((o) => NEXT[o.status]).sort((a, b) => a.ts - b.ts),
+  const act = live.filter((o) => NEXT[o.status]).sort((a, b) => a.ts - b.ts),
     td = paidIn("today"),
     show = act.filter((o) => qf == "all" || o.status == qf),
     cnt = (s) => act.filter((o) => o.status == s).length;
   $("#app").innerHTML =
-    `<div class="stats s4">${stat("Pendapatan hari ini", rp(sum(td)))}${stat("Item dibayar hari ini", units(td), td.length + " transaksi, " + orders.length + " pesanan dimuat")}${stat("Menunggu bayar", orders.filter((o) => o.status == "pending").length)}${stat("Rata-rata pesanan", rp(td.length ? sum(td) / td.length : 0))}</div>
+    `<div class="stats s4">${stat("Pendapatan hari ini", rp(sum(td)))}${stat("Item dibayar hari ini", units(td), td.length + " transaksi, " + live.length + " pesanan dimuat")}${stat("Menunggu bayar", live.filter((o) => o.status == "pending").length)}${stat("Rata-rata pesanan", rp(td.length ? sum(td) / td.length : 0))}</div>
 <h2>Antrian dapur</h2>${pills("data-f", { all: "Semua " + act.length, paid: "Dibayar " + cnt("paid"), making: "Dibuat " + cnt("making"), ready: "Siap " + cnt("ready") }, qf)}` +
     (show.length
       ? show
@@ -157,12 +172,10 @@ function queueV() {
 }
 function note() {
   // bunyi saat ada pesanan baru dibayar, dan jumlah antrian di tab
-  const ids = new Set(
-    orders.filter((o) => o.status == "paid").map((o) => o.id),
-  );
+  const ids = new Set(live.filter((o) => o.status == "paid").map((o) => o.id));
   if (seen && [...ids].some((i) => !seen.has(i))) beep();
   seen = ids;
-  const n = orders.filter((o) => NEXT[o.status]).length;
+  const n = live.filter((o) => NEXT[o.status]).length;
   $("#t-queue").textContent = "Antrian" + (n ? " (" + n + ")" : "");
 }
 
@@ -579,10 +592,41 @@ function render() {
   else if (tab == "stat") statV();
   else if (tab == "hist") $("#hl") ? histList() : histV();
 }
+/* Arsip permanen: antrian langsung hanya memuat 100 pesanan terbaru, jadi Statistik dan Riwayat
+   mengambil sisanya dari tabel orders (maks 5000 pesanan, diperbarui paling cepat tiap 90 detik). */
+const mergeOrders = () => {
+  const m = new Map(arch.map((o) => [o.id, o]));
+  live.forEach((o) => m.set(o.id, o)); // data langsung lebih baru daripada arsip
+  return [...m.values()];
+};
+const archSince = () =>
+  tab == "hist" || (tab == "stat" && rng == "all")
+    ? 0
+    : startOf(Date.now()) -
+      ({ today: 0, 7: 6, 30: 29 }[tab == "stat" ? rng : "today"] || 0) * 864e5;
+async function loadArch() {
+  if (!["queue", "stat", "hist"].includes(tab)) return;
+  const key = String(archSince());
+  if (key == archKey && Date.now() - archAt < 9e4) return;
+  archKey = key;
+  archAt = Date.now();
+  try {
+    const j = await api("GET", null, "/api/admin?hist=1&since=" + key);
+    if (Array.isArray(j.orders)) {
+      arch = j.orders;
+      orders = mergeOrders();
+      render();
+    } else archAt = Date.now() - 6e4;
+  } catch (e) {
+    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    archAt = Date.now() - 6e4; // gagal: coba lagi sekitar 30 detik kemudian
+  }
+}
 async function load() {
   try {
     const j = await api("GET");
-    orders = Array.isArray(j.orders) ? j.orders : [];
+    live = Array.isArray(j.orders) ? j.orders : [];
+    orders = mergeOrders();
     lastOk = Date.now();
     failed = false;
     if (j.mode != mode) {
@@ -592,6 +636,7 @@ async function load() {
     }
     note();
     render();
+    loadArch();
   } catch (e) {
     if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
     failed = true;
@@ -705,6 +750,7 @@ function setTab(t) {
   else if (t == "stok") stock ? stokV() : ((stock = null), stokV());
   else if (t == "hist") histV();
   else render();
+  loadArch();
 }
 function start() {
   $("#out").hidden = false;
@@ -763,6 +809,7 @@ document.addEventListener("click", async (e) => {
   else if (r) {
     rng = r.dataset.r;
     statV();
+    loadArch();
   } else if (f) {
     qf = f.dataset.f;
     queueV();

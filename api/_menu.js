@@ -1,14 +1,18 @@
-// Menu Qahwa (sesuai foto menu terbaru).
+// Menu Qahwa (sesuai foto menu terbaru: Best Seller sampai Roti Canai).
 // Format item:
 //   "Nama"                          -> belum ada harga, tampil "Segera" dan belum bisa dipesan
 //   "Nama=15000"                    -> satu harga
 //   "Nama=Panas:17000|Dingin:20000" -> ada pilihan varian (Panas / Dingin / Float), tiap varian punya harga sendiri
-// ID dibuat dari URUTAN. Jangan menyisipkan atau menghapus item di tengah daftar; tambah item baru di akhir daftar
-// supaya ID lama (stok, riwayat pesanan) tidak bergeser. Mengubah nama atau harga aman.
+// ID dibuat dari URUTAN. Jangan menyisipkan atau menghapus item di tengah daftar setelah toko berjalan;
+// tambah item baru di akhir daftar supaya ID lama (stok, riwayat pesanan) tidak bergeser.
+// Mengubah nama atau harga aman.
 const k = (n) => n * 1000;
 const HD = (n, h, d) => `${n}=Panas:${k(h)}|Dingin:${k(d)}`; // panas + dingin
 const HDF = (n, h, d, f) => `${n}=Panas:${k(h)}|Dingin:${k(d)}|Float:${k(f)}`; // panas + dingin + float
 const P = (n, h) => `${n}=${k(h)}`; // satu harga
+// satu hidangan dengan beberapa jenis; nama hidangan ikut di depan supaya antrian dapur jelas
+// contoh: G("Martabak", [["Biasa", 15]]) -> "Martabak Biasa" = 15.000
+const G = (dish, rows) => rows.map(([j, h]) => P(`${dish} ${j}`, h));
 
 const DATA = {
   "Best Seller": [
@@ -42,20 +46,20 @@ const DATA = {
     HD("Teh", 6, 8),
     HD("Teh Tarik", 15, 17),
     HD("Teh Susu", 15, 17),
-    HD("Susu", 10, 13),
     HD("Teh Susu Telur", 16, 18),
     HD("Lemontea", 15, 18),
     HD("Lemontea Jahe", 17, 20),
     HD("Greentea", 12, 15),
     HD("Greentea Lemon", 14, 17),
-    HD("Greentea Susu", 18, 15), // PERIKSA: di foto panas 18.000, dingin 15.000
-    P("Puding", 15),
+    HD("Greentea Susu", 18, 15), // sesuai foto: panas 18.000, dingin 15.000 (periksa kalau ternyata salah cetak)
+    HD("Susu", 10, 13),
     HD("Milo", 13, 15),
-    P("Milo Cincau", 16),
-    P("Cincau", 13),
-    P("Cappucino Cincau", 16),
+    P("Milo Cincau", 16), // hanya panas
+    P("Cappucino Cincau", 16), // hanya panas
     HD("Cappucino", 13, 16),
-    HD("Cokelat", 13, 16),
+    HD("Coklat", 13, 16),
+    P("Cincau", 13), // hanya panas
+    P("Puding", 15), // hanya panas
   ],
   "Latte or Float": [
     HDF("Cappucino", 20, 22, 25),
@@ -65,20 +69,21 @@ const DATA = {
     HDF("Vanilla", 20, 22, 25),
     HDF("Hazelnut", 20, 22, 25),
     HDF("Tiramisu", 20, 22, 25),
-    HDF("Manggo", 20, 22, 25),
-    HDF("Macha", 20, 22, 25),
+    HDF("Mango", 20, 22, 25),
+    HDF("Matcha", 20, 22, 25),
   ],
   "Other Menu": [
     HD("Teh Ginger", 13, 15),
     HD("Susu Ginger", 15, 16),
-    P("Affogato", 22),
-    P("Avocado Espresso", 22),
-    P("Avocado Float Espresso", 30),
+    P("Affogato", 22), // hanya dingin
+    P("Avocado Float Espresso", 30), // hanya dingin
+    P("Avocado Espresso", 22), // hanya dingin
     HD("Infused Water", 12, 14),
-    P("Ice Calamansi", 14),
-    P("Ice Cream Vanilla", 12),
+    P("Ice Calamansi", 14), // hanya dingin
+    P("Ice Cream Vanilla", 12), // hanya dingin
   ],
   Mocktail: [
+    // semua mocktail disajikan dingin
     P("Ocean Blue", 20),
     P("Blue Mojito", 20),
     P("Red Mojito", 20),
@@ -91,48 +96,82 @@ const DATA = {
     P("Manggo Squash", 20),
     P("Ice Smoothies Manggo", 20),
   ],
-  Makanan: [
-    P("Mie Bangladesh", 14),
-    P("Mie Bangladesh Double", 18),
-    P("Indomie", 14),
-    P("Indomie Udang/Cumi", 22),
-    P("Indomie Seafood", 27),
-    P("Ifumie", 15),
-    P("Ifumie Udang/Cumi", 22),
-    P("Ifumie Seafood", 27),
-    P("Mie Hun", 15),
-    P("Mie Hun Udang/Cumi", 22),
-    P("Mie Hun Seafood", 27),
-    P("Mie Aceh", 15),
-    P("Mie Aceh Udang/Cumi", 22),
-    P("Mie Aceh Seafood", 27),
-    P("Ayam Penyet/Pecak", 18),
-    P("Nasi Goreng", 15),
-    P("Nasi Goreng Udang/Cumi", 27),
-    P("Nasi Goreng Ayam", 25),
-    P("Nasi Goreng Seafood", 30),
-    P("Nasi Goreng Kampung", 17),
-    P("Nasi Goreng Kampung Udang/Cumi", 27),
-    P("Nasi Goreng Kampung Ayam", 25),
-    P("Nasi Goreng Kampung Seafood", 30),
-  ],
-  // Crispy dan Tambahan: foto menunya belum dikirim, harga diisi nanti ("Segera" sampai ada harga)
+  "Nasi Goreng": G("Nasi Goreng", [
+    ["Telur", 15],
+    ["Cumi", 25],
+    ["Udang", 25],
+    ["Daging", 25],
+    ["Ayam", 25],
+    ["SeaFood", 30],
+    ["Special", 35],
+  ]),
+  "Nasi Goreng Kampung": G("Nasi Goreng Kampung", [
+    ["Telur", 17],
+    ["Cumi", 27],
+    ["Udang", 27],
+    ["Daging", 25],
+    ["Ayam", 25],
+    ["SeaFood", 30],
+    ["Special", 35],
+  ]),
+  "Nasi Goreng Ijo": G("Nasi Goreng Ijo", [
+    ["Telur", 17],
+    ["Cumi", 27],
+    ["Udang", 27],
+    ["Daging", 25],
+    ["SeaFood", 30],
+    ["Special", 35],
+  ]),
+  "Nasi Goreng Pataya": G("Nasi Goreng Pataya", [
+    ["Biasa", 23],
+    ["Cumi", 28],
+    ["Daging", 28],
+    ["Seafood", 35],
+    ["Special", 40],
+  ]),
   Crispy: [
-    "Kentang Original",
-    "Kentang BBQ",
-    "Jagung Bakar",
-    "Kentang Sapi Panggang/Balodo",
-    "Kentang Rumput Laut/Saus Keju",
-    "Banana Roll",
-    "Banana Nugget",
-    "Nugget",
-    "Nugget Mix",
-    "Tahu Walik",
-    "Tempe Crispy",
-    "Risol Ayam",
-    "Sosis",
+    P("Nugget", 18),
+    P("Sosis", 18),
+    P("Mix Platter (Nugget, Sosis, Kentang)", 20),
+    P("Jamur Crispy", 20),
+    P("Kentang", 18),
+    P("Nasi", 5),
   ],
-  Tambahan: ["Nasi Putih", "Sambal Penyet/Pecak"],
+  "Chicken Katsu": G("Chicken Katsu", [
+    ["Biasa", 20],
+    ["Kari Ayam", 28],
+    ["Special", 35],
+  ]),
+  Martabak: G("Martabak", [
+    ["Biasa", 15],
+    ["Kari Ayam", 20],
+    ["Udang", 23],
+    ["Daging", 23],
+    ["Special", 28],
+  ]),
+  "Kue/Mie Tiaw": G("Kue/Mie Tiaw", [
+    ["Biasa", 15],
+    ["Cumi", 22],
+    ["Udang", 22],
+    ["Daging", 28],
+    ["SeaFood", 27],
+    ["Special", 35],
+  ]),
+  "Toom Yum": G("Toom Yum", [
+    ["Biasa", 20],
+    ["Daging", 25],
+    ["Cumi", 25],
+    ["Udang", 25],
+    ["SeaFood", 30],
+    ["Special", 40],
+  ]),
+  "Roti Canai": G("Roti Canai", [
+    ["Gula", 10],
+    ["Kari Ayam", 15],
+    ["Cokelat", 15],
+    ["Keju", 15],
+    ["Cokelat Keju", 15],
+  ]),
 };
 
 let id = 0;

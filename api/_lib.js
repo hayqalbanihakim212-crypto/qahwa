@@ -30,8 +30,8 @@ const MT = {
 };
 const basic = "Basic " + Buffer.from(SERVER_KEY + ":").toString("base64");
 // Cegah salah pasang kunci: sandbox wajib kunci SB-, production wajib kunci non-SB
-if (MODE === "locked") return "Mode mock dikunci di production.";
 const configError = () => {
+  if (MODE === "locked") return "Mode mock dikunci di production.";
   if (MODE === "mock") return null;
   if (!SERVER_KEY || !CLIENT_KEY) return "Kunci Midtrans belum diisi.";
   if (
@@ -171,7 +171,9 @@ const sb = async (method, path, body, extra = {}) => {
     method,
     headers: {
       apikey: SK,
-      Authorization: "Bearer " + SK,
+      // kunci service_role lama berbentuk JWT (eyJ...) dan dikirim juga sebagai Bearer;
+      // kunci baru sb_secret_... cukup lewat header apikey
+      ...(SK.startsWith("eyJ") ? { Authorization: "Bearer " + SK } : {}),
       "Content-Type": "application/json",
       ...extra,
     },
@@ -488,9 +490,9 @@ module.exports = {
   safeEq,
   ID_RE,
   newId,
-  newSecret, // <- tambah
-  secOk, // <- tambah
-  clean, // <- tambah
+  newSecret,
+  secOk,
+  clean,
   ip,
   sameOrigin,
   limit,

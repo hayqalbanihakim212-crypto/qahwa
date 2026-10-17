@@ -1,2 +1,1 @@
-{ "name": "qahwa-order", "private": true, "engines": { "node": ">=18" },
-  "scripts": { "dev": "node scripts/dev.js", "hash": "node scripts/hash-password.js", "preview": "node scripts/build-preview.js" } }
+{"name":"qahwa-order","private":true,"engines":{"node":">=18"},"scripts":{"dev":"node scripts/dev.js","hash":"node scripts/hash-password.js","preview":"node scripts/build-preview.js"},"dependencies":{"@vercel/analytics":"^2.0.1"}}
