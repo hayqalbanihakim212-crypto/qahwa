@@ -184,6 +184,7 @@
 
 .srow {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--s3);
@@ -263,9 +264,6 @@
 }
 .ebox .acts {
   margin-top: var(--s2);
-}
-.srow {
-  flex-wrap: wrap;
 }
 /* penanda varian di antrian dapur */
 .chip.v-panas {

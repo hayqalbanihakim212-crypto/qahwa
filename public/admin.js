@@ -1,8 +1,5 @@
-const $ = (s) => document.querySelector(s),
-  rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID"),
-  esc = (s) =>
-    String(s ?? "").replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";"),
-  hm = (t) =>
+/* Helper bersama ($, rp, esc, TAKE, tl, stepsHtml) ada di common.js */
+const hm = (t) =>
     new Date(t).toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
@@ -52,9 +49,8 @@ const NEXT = {
     mock: "MODE SIMULASI: pesanan berasal dari pembayaran palsu",
     sandbox: "MODE UJI MIDTRANS: tidak ada uang sungguhan",
   },
-  TAKE = "Bawa pulang",
-  tl = (t) => (t == TAKE ? TAKE : "Meja " + t),
   num = (v) => Number(v) || 0;
+const RANGE_DAYS = { today: 0, 7: 6, 30: 29 }; // rentang Statistik: berapa hari ke belakang dari hari ini
 let orders = [], // gabungan antrian langsung + arsip (untuk statistik, riwayat, pendapatan)
   live = [], // 100 pesanan terbaru dari server, diperbarui tiap 5 detik
   arch = [], // arsip permanen dari tabel orders
@@ -91,9 +87,7 @@ async function api(method, body, url = "/api/admin") {
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (r.status == 401) throw 401;
-  if (r.status == 429) throw 429;
-  if (r.status == 503) throw 503;
+  if ([401, 429, 503].includes(r.status)) throw r.status;
   return r.json();
 }
 function beep() {
@@ -116,6 +110,19 @@ function loginV(m) {
     `<h2>Masuk admin</h2><p class="muted">Halaman ini khusus pemilik dan staf.</p>${m ? `<div class="alert" role="alert">${esc(m)}</div>` : ""}<label>Password<input id="pw" type="password" autocomplete="current-password" maxlength="200"></label><button class="btn" id="go">Masuk</button>`;
 }
 
+// 401 dari server = sesi habis: tampilkan layar masuk. Mengembalikan true kalau itu yang terjadi.
+function sessionLost(e) {
+  if (e !== 401) return false;
+  loginV("Sesi berakhir. Silakan masuk lagi.");
+  return true;
+}
+// pembuat fungsi pesan sukses/gagal di elemen dengan id tertentu
+const flash = (sel) => (t, bad) => {
+  const e = $(sel);
+  if (e)
+    e.innerHTML = `<div class="${bad ? "alert" : "okmsg"}" role="status">${esc(t)}</div>`;
+};
+
 /* ---------- Hitung data: semua angka dihitung ulang dari daftar pesanan terbaru ---------- */
 const startOf = (d) => {
   const x = new Date(d);
@@ -125,7 +132,7 @@ const startOf = (d) => {
 const inRange = (o, r) =>
   r == "all" ||
   num(o.ts) >=
-    startOf(Date.now()) - ({ today: 0, 7: 6, 30: 29 }[r] || 0) * 864e5;
+    startOf(Date.now()) - (RANGE_DAYS[r] || 0) * 864e5;
 const paidIn = (r) =>
   orders.filter((o) => PAID.includes(o.status) && inRange(o, r));
 const sum = (l) => l.reduce((s, o) => s + num(o.total), 0);
@@ -266,7 +273,7 @@ const histRows = () =>
 function detail(o) {
   const k = PAID.indexOf(o.status),
     it = o.items || [];
-  return `<div class="dt"><div class="meta"><span>Nomor</span><b>${esc(o.id)}</b><span>Pemesan</span><b>${esc(o.name || "-")}</b><span>Tempat</span><b>${esc(tl(o.table))}</b><span>Waktu</span><b>${new Date(o.ts).toLocaleString("id-ID")}</b>${o.note ? `<span>Catatan</span><b>${esc(o.note)}</b>` : ""}</div>${it.map((i) => `<div class="row"><span>${num(i.q)}× ${esc(i.n)}${num(i.p) ? ` <span class="muted">@ ${rp(i.p)}</span>` : ""}</span><b>${num(i.p) ? rp(num(i.q) * num(i.p)) : ""}</b></div>`).join("")}<div class="row"><b>Total (${units([o])} item)</b><b>${rp(o.total)}</b></div>${k >= 0 ? `<ol class="steps">${["Dibayar", "Dibuat", "Siap", "Selesai"].map((t, j) => `<li class="${k >= j ? "on" : ""}">${t}</li>`).join("")}</ol>` : ""}<button class="btn ghost sm no" data-pr="${esc(o.id)}">Cetak struk</button></div>`;
+  return `<div class="dt"><div class="meta"><span>Nomor</span><b>${esc(o.id)}</b><span>Pemesan</span><b>${esc(o.name || "-")}</b><span>Tempat</span><b>${esc(tl(o.table))}</b><span>Waktu</span><b>${new Date(o.ts).toLocaleString("id-ID")}</b>${o.note ? `<span>Catatan</span><b>${esc(o.note)}</b>` : ""}</div>${it.map((i) => `<div class="row"><span>${num(i.q)}× ${esc(i.n)}${num(i.p) ? ` <span class="muted">@ ${rp(i.p)}</span>` : ""}</span><b>${num(i.p) ? rp(num(i.q) * num(i.p)) : ""}</b></div>`).join("")}<div class="row"><b>Total (${units([o])} item)</b><b>${rp(o.total)}</b></div>${k >= 0 ? stepsHtml(k + 1) : ""}<button class="btn ghost sm no" data-pr="${esc(o.id)}">Cetak struk</button></div>`;
 }
 function histList() {
   const el = $("#hl");
@@ -508,7 +515,7 @@ async function loadStock() {
     stock = j;
     syncFood();
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     stock = { menu: [], closed: [], err: String((e && e.message) || e || "?") };
   }
   if (tab == "stok") stokV();
@@ -551,11 +558,7 @@ ${priceBox(nf, "a")}
 <label>Cari menu<input id="sq" value="${esc(sq)}" placeholder="Nama menu" autocomplete="off"></label>${pills("data-sf", { all: "Semua", ok: "Tersedia", off: "Habis" }, sf)}<div id="sl"></div>`;
   sList();
 }
-const smsg = (t, bad) => {
-  const e = $("#smsg");
-  if (e)
-    e.innerHTML = `<div class="${bad ? "alert" : "okmsg"}" role="status">${esc(t)}</div>`;
-};
+const smsg = flash("#smsg");
 async function addMenu() {
   const n = nf.n.trim().replace(/\s+/g, " "),
     c = nf.c.trim().replace(/\s+/g, " "),
@@ -592,7 +595,7 @@ async function addMenu() {
     stokV();
     smsg('Menu "' + n + '" ditambahkan ke ' + c + ".");
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     b.disabled = false;
     smsg("Gagal menambah menu. Coba lagi.", 1);
   }
@@ -620,7 +623,7 @@ async function saveEdit() {
     stokV();
     smsg('Harga "' + m.n + '" disimpan.');
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     alert("Gagal menyimpan harga. Coba lagi.");
   }
 }
@@ -643,7 +646,7 @@ async function delMenu(id) {
     stokV();
     smsg('Menu "' + m.n + '" dihapus.');
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     stock = null;
     stokV();
     alert("Gagal menghapus menu. Data dimuat ulang.");
@@ -704,7 +707,7 @@ async function setStock(body) {
   try {
     await api("POST", body, "/api/stock");
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     stock = null;
     stokV();
     alert("Gagal menyimpan stok. Data dimuat ulang.");
@@ -727,7 +730,7 @@ const archSince = () =>
   tab == "hist" || (tab == "stat" && rng == "all")
     ? 0
     : startOf(Date.now()) -
-      ({ today: 0, 7: 6, 30: 29 }[tab == "stat" ? rng : "today"] || 0) * 864e5;
+      (RANGE_DAYS[tab == "stat" ? rng : "today"] || 0) * 864e5;
 async function loadArch() {
   if (!["queue", "stat", "hist"].includes(tab)) return;
   const key = String(archSince());
@@ -742,7 +745,7 @@ async function loadArch() {
       render();
     } else archAt = Date.now() - 6e4;
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     archAt = Date.now() - 6e4; // gagal: coba lagi sekitar 30 detik kemudian
   }
 }
@@ -762,7 +765,7 @@ async function load() {
     render();
     loadArch();
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     failed = true;
     $("#mode").textContent =
       "Koneksi terputus. Data mungkin tidak terbaru, mencoba lagi...";
@@ -775,7 +778,7 @@ async function loadTables() {
   try {
     tables = (await api("GET", null, "/api/table")).tables || [];
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     tables = [];
   }
   if (tab == "meja") mejaV();
@@ -824,11 +827,7 @@ function drawQR() {
     })
     .join("");
 }
-const qmsg = (t, bad) => {
-  const e = $("#qmsg");
-  if (e)
-    e.innerHTML = `<div class="${bad ? "alert" : "okmsg"}" role="status">${esc(t)}</div>`;
-};
+const qmsg = flash("#qmsg");
 async function saveTables() {
   const n = Math.floor(+$("#cnt").value),
     tk = $("#tk").checked;
@@ -853,7 +852,7 @@ async function saveTables() {
       "Tersimpan: " + tables.length + " QR. Cetak, lalu tempel di tiap meja.",
     );
   } catch (e) {
-    if (e === 401) return loginV("Sesi berakhir. Silakan masuk lagi.");
+    if (sessionLost(e)) return;
     b.disabled = false;
     qmsg("Gagal menyimpan. Coba lagi.", 1);
   }

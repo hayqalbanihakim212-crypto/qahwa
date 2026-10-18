@@ -1,8 +1,5 @@
-const K = "qahwa_order",
-  $ = (s) => document.querySelector(s),
-  rp = (n) => "Rp " + Number(n).toLocaleString("id-ID"),
-  esc = (s) =>
-    String(s ?? "").replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
+/* Helper bersama ($, rp, esc, TAKE, tl, stepsHtml) ada di common.js */
+const K = "qahwa_order";
 /* Menu contoh hanya untuk pratinjau tanpa server. Saat live, menu dan harga diambil dari /api/menu. */
 const SAMPLE = [
   { id: 1, c: "Best Seller", n: "Sanger Aren", p: 20000 },
@@ -17,8 +14,6 @@ const MODE_TXT = {
   sandbox: "MODE UJI MIDTRANS: tidak ada uang sungguhan",
 };
 /* Meja otomatis: QR di meja membawa kode (?m=KODE). Server menerjemahkan kode jadi nama meja; pelanggan tidak memilih meja. */
-const TAKE = "Bawa pulang",
-  tl = (t) => (t == TAKE ? TAKE : "Meja " + t);
 let CODE = (new URLSearchParams(location.search).get("m") || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
@@ -71,7 +66,8 @@ const FIN = (s) => s == "done" || s == "failed",
       body: JSON.stringify(b),
     });
 
-const na = (m) => m.off || (CFG.closed || []).includes(m.c);
+const isClosed = (c) => (CFG.closed || []).includes(c);
+const na = (m) => m.off || isClosed(m.c);
 const ctl = (key) =>
   cart[key]
     ? `<div class="qty"><button data-a="m:${key}" aria-label="Kurangi">−</button><i>${cart[key]}</i><button data-a="p:${key}" aria-label="Tambah">+</button></div>`
@@ -88,7 +84,7 @@ const card = (m) => {
   return `<div class="mi${dead ? " off" : ""}"><span class="nm">${esc(m.n)}</span>${
     m.p > 0 && !dead
       ? `<span class="pc">${rp(m.p)}</span>${ctl(String(m.id))}`
-      : `<span class="soon">${m.p > 0 ? ((CFG.closed || []).includes(m.c) ? "Ditutup" : "Habis") : "Segera"}</span>`
+      : `<span class="soon">${m.p > 0 ? (isClosed(m.c) ? "Ditutup" : "Habis") : "Segera"}</span>`
   }</div>`;
 };
 function hiV() {
@@ -109,7 +105,7 @@ function menuV() {
       .filter((c) => cat == "Semua" || c == cat)
       .map(
         (c) =>
-          `<h2 class="cat">${esc(c)}</h2>${(CFG.closed || []).includes(c) ? '<p class="muted center">Sedang ditutup</p>' : ""}<div class="list">${MENU.filter(
+          `<h2 class="cat">${esc(c)}</h2>${isClosed(c) ? '<p class="muted center">Sedang ditutup</p>' : ""}<div class="list">${MENU.filter(
             (m) => m.c == c,
           )
             .map(card)
@@ -146,10 +142,10 @@ function trackV() {
       failed: "Pembayaran gagal atau kedaluwarsa",
     }[o.status];
   return (
-    `<h2>${esc(o.id)}</h2><p class="muted">${o.table == "Bawa pulang" ? "Bawa pulang" : "Meja " + esc(o.table)}</p><div class="card center"><b>${msg}</b></div>` +
+    `<h2>${esc(o.id)}</h2><p class="muted">${esc(tl(o.table))}</p><div class="card center"><b>${msg}</b></div>` +
     (o.status == "failed"
       ? ""
-      : `<ol class="steps">${["Dibayar", "Dibuat", "Siap", "Selesai"].map((t, k) => `<li class="${i > k ? "on" : ""}">${t}</li>`).join("")}</ol>`) +
+      : stepsHtml(i)) +
     (o.items || [])
       .map(
         (l) =>
@@ -236,6 +232,12 @@ async function snapPay() {
     toast("Midtrans tidak dapat dimuat.");
   }
 }
+// kode error dari POST /api/order -> pesan untuk pelanggan
+const PAY_ERROR = {
+  too_many: "Terlalu banyak percobaan. Tunggu sebentar.",
+  table: "QR meja tidak dikenali. Scan ulang QR di mejamu.",
+  empty: "Keranjang kosong. Pilih menu dulu.",
+};
 async function pay() {
   if (!T) return toast("Scan QR di mejamu dulu untuk memesan.");
   if (demo)
@@ -254,7 +256,7 @@ async function pay() {
       code: CODE,
     });
     const j = await r.json();
-    if (!j.token) throw r.status;
+    if (!j.token) throw j.error || r.status;
     ord = {
       id: j.id,
       token: j.token,
@@ -272,20 +274,14 @@ async function pay() {
     poll();
     snapPay();
   } catch (e) {
-    if (e == 409) {
+    if (e == "unavailable") {
       toast("Ada menu yang habis atau ditutup. Menu sudah diperbarui.");
       return refresh().then(() => {
         view = "menu";
         paint();
       });
     }
-    toast(
-      e == 429
-        ? "Terlalu banyak percobaan. Tunggu sebentar."
-        : e == 400
-          ? "QR meja tidak dikenali. Scan ulang QR di mejamu."
-          : "Gagal membuat pembayaran. Coba lagi.",
-    );
+    toast(PAY_ERROR[e] || "Gagal membuat pembayaran. Coba lagi.");
     b.disabled = false;
     b.textContent = "Bayar sekarang";
   }
@@ -443,23 +439,5 @@ function enter() {
   stopHero = null;
   setTimeout(() => el.remove(), 800);
 }
-/* Kartu menu miring mengikuti kursor (mouse saja) */
-document.addEventListener("pointermove", (e) => {
-  if (e.pointerType != "mouse") return;
-  const m = e.target.closest && e.target.closest(".m");
-  if (!m) return;
-  const r = m.getBoundingClientRect(),
-    x = (e.clientX - r.left) / r.width - 0.5,
-    y = (e.clientY - r.top) / r.height - 0.5;
-  m.style.setProperty("--ry", x * 14 + "deg");
-  m.style.setProperty("--rx", -y * 14 + "deg");
-});
-document.addEventListener("pointerout", (e) => {
-  const m = e.target.closest && e.target.closest(".m");
-  if (m && !m.contains(e.relatedTarget)) {
-    m.style.removeProperty("--rx");
-    m.style.removeProperty("--ry");
-  }
-});
 intro();
 init();

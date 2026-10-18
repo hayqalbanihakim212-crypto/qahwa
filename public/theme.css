@@ -19,7 +19,6 @@
 }
 html,
 body {
-  overflow-x: hidden;
   background: #0b0b0b;
 }
 :focus-visible {
@@ -231,15 +230,6 @@ input::placeholder {
   padding: 0 var(--s5) 48px;
   text-align: center;
 }
-.home .cover {
-  display: block;
-  width: min(360px, 100%);
-  height: auto;
-  margin: var(--s5) auto;
-  border-radius: 22px;
-  border: 1px solid var(--gold);
-  box-shadow: 0 0 40px rgba(233, 166, 59, 0.15);
-}
 .home .hero-logo {
   width: min(300px, 80vw);
   margin-top: var(--s5);
@@ -249,19 +239,6 @@ input::placeholder {
 }
 .home p {
   margin: var(--s2) 0;
-}
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--s2);
-  margin: var(--s3) 0;
-}
-.tags span {
-  border: 1px solid rgba(233, 166, 59, 0.6);
-  border-radius: var(--r-pill);
-  padding: 6px 14px;
-  font-size: var(--fs-s);
 }
 .info {
   text-align: left;
@@ -304,44 +281,13 @@ input::placeholder {
   }
 }
 
-/* HP / layar sentuh: matikan 3D berbasis translateZ yang membuat teks buram di Android */
+/* HP / layar sentuh: efek 3D lain dimatikan di ds.css; di sini hanya bayangan teks tema gelap */
 @media (hover: none), (pointer: coarse) {
-  .wrap,
-  .grid,
-  .intro {
-    perspective: none;
-  }
-  #app.in {
-    animation: fadein 0.3s;
-  }
   .fb span,
   .hero h1,
   .greet b {
     text-shadow: none;
   }
-  .btn,
-  .add,
-  .chips button {
-    transition: none;
-  }
-  .stage canvas {
-    touch-action: pan-y;
-  }
-}
-@keyframes fadein {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.intro {
-  height: 100dvh;
-  overflow-y: auto;
-}
-.stage {
-  min-height: 160px;
 }
 
 /* menu habis atau kategori ditutup */
@@ -379,26 +325,6 @@ input::placeholder {
   scroll-snap-align: center;
   scroll-snap-stop: always;
 }
-.slider .nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--gold);
-  background: rgba(11, 11, 11, 0.65);
-  color: var(--gold);
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.slider .prev {
-  left: 8px;
-}
-.slider .next {
-  right: 8px;
-}
 .slider .dots {
   display: flex;
   justify-content: center;
@@ -417,11 +343,6 @@ input::placeholder {
 .slider .dots i.on {
   background: var(--gold);
   transform: scale(1.25);
-}
-@media (hover: none), (pointer: coarse) {
-  .slider .nav {
-    display: none;
-  }
 }
 /* menu dengan varian panas/dingin/float */
 .mi.var {

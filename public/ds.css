@@ -42,6 +42,10 @@
 *::after {
   box-sizing: inherit;
 }
+html,
+body {
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -125,14 +129,6 @@ h2 {
   box-shadow:
     0 1px 0 var(--line),
     0 10px 24px rgba(0, 0, 0, 0.06);
-}
-.ar {
-  font: 700 2.6rem/1 var(--serif);
-  text-shadow:
-    1px 1px 0 #999,
-    2px 2px 0 #999,
-    3px 3px 0 #777,
-    4px 5px 7px rgba(0, 0, 0, 0.25);
 }
 .ttl {
   flex: 1;
@@ -287,7 +283,7 @@ select {
   padding: var(--s3) 14px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
 }
-/* menu: kartu miring mengikuti kursor, isi menonjol ke depan */
+/* menu: chip kategori (menempel di atas saat digulir) */
 .chips {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -320,85 +316,6 @@ select {
   color: #fff;
   border-color: var(--action);
   box-shadow: 0 3px 0 var(--depth);
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--s4);
-  padding-top: var(--s3);
-  perspective: 900px;
-}
-.m {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r2);
-  display: flex;
-  flex-direction: column;
-  transform-style: preserve-3d;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition:
-    transform 0.18s,
-    box-shadow 0.2s;
-  box-shadow: var(--lift);
-  padding-bottom: 2px;
-}
-.m:hover {
-  box-shadow:
-    0 1px 0 #fff inset,
-    0 4px 8px rgba(0, 0, 0, 0.06),
-    0 22px 40px rgba(0, 0, 0, 0.14);
-}
-.m:active {
-  transform: rotateX(5deg) scale(0.98);
-}
-.ph {
-  height: 96px;
-  margin: var(--s2);
-  border-radius: var(--r1);
-  background: linear-gradient(145deg, #fafafa, #e9e9e9);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  transform: translateZ(26px);
-  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.12);
-}
-.ph span {
-  font: 700 2.8rem var(--serif);
-  color: #111;
-  text-shadow:
-    1px 1px 0 #aaa,
-    2px 2px 0 #aaa,
-    3px 3px 0 #888,
-    4px 5px 8px rgba(0, 0, 0, 0.3);
-}
-.ph img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.m b {
-  margin: var(--s2) var(--s3) 0;
-  transform: translateZ(14px);
-}
-.m p {
-  margin: 2px var(--s3) var(--s2);
-  color: var(--muted);
-  font-size: var(--fs-s);
-  flex: 1;
-  transform: translateZ(8px);
-}
-.pr {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--s2);
-  padding: 0 var(--s3) var(--s3);
-  transform: translateZ(20px);
-}
-.pr > span {
-  font-weight: 700;
-  white-space: nowrap;
 }
 .add,
 .qty button {
@@ -621,6 +538,8 @@ input[type="checkbox"] {
   padding: calc(18px + env(safe-area-inset-top, 0px)) var(--s5)
     calc(22px + env(safe-area-inset-bottom, 0px));
   perspective: 1200px;
+  height: 100dvh;
+  overflow-y: auto;
   transform-origin: 50% 0;
   transition:
     transform 0.75s cubic-bezier(0.6, 0, 0.2, 1),
@@ -636,7 +555,7 @@ input[type="checkbox"] {
   flex: 1;
   width: 100%;
   max-width: 560px;
-  min-height: 200px;
+  min-height: 160px;
 }
 .stage canvas {
   position: absolute;
@@ -717,26 +636,13 @@ input[type="checkbox"] {
 /* Android/layar sentuh: matikan 3D berbasis translateZ yang membuat teks buram */
 @media (hover: none), (pointer: coarse) {
   .wrap,
-  .grid,
   .intro {
     perspective: none;
-  }
-  .m {
-    transform: none !important;
-    transform-style: flat;
-  }
-  .ph,
-  .m b,
-  .m p,
-  .pr {
-    transform: none;
   }
   #app.in {
     animation: fadein 0.3s;
   }
-  .ph span,
   .fb span,
-  .ar,
   .hero h1,
   .greet b {
     text-shadow: 1px 1px 0 #bbb;
@@ -754,15 +660,4 @@ input[type="checkbox"] {
   to {
     opacity: 1;
   }
-}
-html,
-body {
-  overflow-x: hidden;
-}
-.intro {
-  height: 100dvh;
-  overflow-y: auto;
-}
-.stage {
-  min-height: 160px;
 }
