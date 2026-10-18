@@ -142,7 +142,7 @@ const DATA = {
     ["Kari Ayam", 28],
     ["Special", 35],
   ]),
-  "Martabak": G("Martabak", [
+  Martabak: G("Martabak", [
     ["Biasa", 15],
     ["Kari Ayam", 20],
     ["Udang", 23],
@@ -177,7 +177,7 @@ const DATA = {
     ["Keju", 15],
     ["Cokelat", 15],
   ]),
-  "Burgers": G("Burgers", [
+  Burgers: G("Burgers", [
     ["Biasa", 20],
     ["Ayam", 25],
     ["Daging", 25],

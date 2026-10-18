@@ -15,12 +15,14 @@ const FOOD_BASE = [
     "Nasi Goreng Kampung",
     "Nasi Goreng Ijo",
     "Nasi Goreng Pataya",
-    "Crispy",
+    "Snack",
     "Chicken Katsu",
     "Martabak",
     "Kue/Mie Tiaw",
     "Toom Yum",
     "Roti Canai",
+    "Roti Bakar",
+    "Burgers",
   ],
   FOOD = [...FOOD_BASE];
 /* Kategori makanan buatan admin disimpan di server (stock.food) dan digabung ke daftar FOOD. */
