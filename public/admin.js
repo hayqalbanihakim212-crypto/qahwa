@@ -319,8 +319,8 @@ async function exportPdf() {
   b.disabled = true;
   b.textContent = "Membuat PDF...";
   try {
-    await loadJs("/vendor/jspdf.umd.min.js");
-    await loadJs("/vendor/jspdf.plugin.autotable.min.js");
+await loadJs("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+await loadJs("https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js");
     const rows = histRows(),
       paid = rows.filter((o) => PAID.includes(o.status)),
       doc = new window.jspdf.jsPDF({
