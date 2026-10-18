@@ -42,7 +42,7 @@ const DATA = {
     P("Kuini", 15),
     P("Avocado Cheese", 17),
   ],
-  "Besides Coffee": [
+  "Soft Based Drinks": [
     HD("Teh", 6, 8),
     HD("Teh Tarik", 15, 17),
     HD("Teh Susu", 15, 17),
@@ -51,7 +51,7 @@ const DATA = {
     HD("Lemontea Jahe", 17, 20),
     HD("Greentea", 12, 15),
     HD("Greentea Lemon", 14, 17),
-    HD("Greentea Susu", 18, 15), // sesuai foto: panas 18.000, dingin 15.000 (periksa kalau ternyata salah cetak)
+    HD("Greentea Susu", 18, 15),
     HD("Susu", 10, 13),
     HD("Milo", 13, 15),
     P("Milo Cincau", 16), // hanya panas
@@ -82,7 +82,7 @@ const DATA = {
     P("Ice Calamansi", 14), // hanya dingin
     P("Ice Cream Vanilla", 12), // hanya dingin
   ],
-  Mocktail: [
+  "Based Soda": [
     // semua mocktail disajikan dingin
     P("Ocean Blue", 20),
     P("Blue Mojito", 20),
@@ -129,7 +129,7 @@ const DATA = {
     ["Seafood", 35],
     ["Special", 40],
   ]),
-  Crispy: [
+  Snack: [
     P("Nugget", 18),
     P("Sosis", 18),
     P("Mix Platter (Nugget, Sosis, Kentang)", 20),
@@ -142,7 +142,7 @@ const DATA = {
     ["Kari Ayam", 28],
     ["Special", 35],
   ]),
-  Martabak: G("Martabak", [
+  "Martabak": G("Martabak", [
     ["Biasa", 15],
     ["Kari Ayam", 20],
     ["Udang", 23],
@@ -171,6 +171,18 @@ const DATA = {
     ["Cokelat", 15],
     ["Keju", 15],
     ["Cokelat Keju", 15],
+  ]),
+  "Roti Bakar": G("Roti Bakar", [
+    ["Biasa", 10],
+    ["Keju", 15],
+    ["Cokelat", 15],
+  ]),
+  "Burgers": G("Burgers", [
+    ["Biasa", 20],
+    ["Ayam", 25],
+    ["Daging", 25],
+    ["SeaFood", 30],
+    ["Special", 35],
   ]),
 };
 
